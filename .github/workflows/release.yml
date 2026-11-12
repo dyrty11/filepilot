@@ -1,0 +1,56 @@
+name: Релиз
+# Запускается при создании тега вида v0.2.0: собирает EXE на GitHub, а не на чьём-то компьютере.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Проверка версии
+        shell: bash
+        run: |
+          VER=$(python -c "import filepilot; print(filepilot.__version__)")
+          test "v$VER" = "${GITHUB_REF_NAME}" || (echo "Тег ${GITHUB_REF_NAME} не совпадает с версией $VER" && exit 1)
+      - name: Зависимости
+        run: python -m pip install -r requirements.txt pyinstaller pytest
+      - name: Тесты
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q
+      - name: Сборка EXE
+        run: python -m PyInstaller --noconfirm --clean filepilot.spec
+      - name: Портативная версия
+        shell: pwsh
+        run: |
+          Copy-Item dist\FilePilot dist\FilePilot-Portable -Recurse
+          New-Item dist\FilePilot-Portable\portable.flag -ItemType File | Out-Null
+          Compress-Archive -Path dist\FilePilot-Portable -DestinationPath dist\FilePilot-Portable.zip
+      - name: Установщик
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+      - name: Контрольные суммы
+        shell: pwsh
+        run: |
+          Get-ChildItem dist\FilePilot-Portable.zip, dist\installer\*.exe | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          } | Out-File dist\SHA256SUMS.txt -Encoding ascii
+          Get-Content dist\SHA256SUMS.txt
+      - name: Публикация релиза
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/FilePilot-Portable.zip
+            dist/installer/*.exe
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
