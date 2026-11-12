@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+FilePilotData/
+.pytest_cache/
+*.7z
+*.zip
+*.exe

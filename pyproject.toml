@@ -1,0 +1,19 @@
+[project]
+name = "filepilot"
+version = "0.2.0"
+description = "Локальный поиск по содержимому файлов, дубликаты, карта диска и правила сортировки"
+requires-python = ">=3.10"
+dependencies = ["PySide6>=6.5", "pypdf>=3.17", "send2trash>=1.8"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+filepilot = "filepilot.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["filepilot*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
