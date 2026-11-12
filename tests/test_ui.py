@@ -54,6 +54,13 @@ def test_full_flow(app, tmp_path):
     w.search_tab.query.setText("договор")
     w.search_tab.run_search()
     assert w.search_tab.table.rowCount() == 1
+    w.search_tab.table.selectRow(0)
+    assert "Договор поставки" in w.search_tab.preview.toPlainText()
+    w.search_tab.settings.save_search({"name": "т", "query": "договор", "exts": "txt", "min_kb": 0, "max_kb": 0, "older": 0, "filters": True})
+    w.search_tab.refresh_saved("т")
+    w.search_tab.query.setText("")
+    w.search_tab.load_saved()
+    assert w.search_tab.query.text() == "договор" and w.search_tab.ext.text() == "txt"
     w.dupes_tab.start()
     assert wait_until(lambda: w.dupes_tab._task is None)
     assert w.dupes_tab.tree.topLevelItemCount() == 1

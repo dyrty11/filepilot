@@ -7,13 +7,14 @@ from pathlib import Path
 from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QAbstractTextDocumentLayout, QGuiApplication, QTextDocument
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QCheckBox, QGroupBox, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QFileDialog, QGroupBox, QInputDialog, QMessageBox, QSplitter, QTextBrowser, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu,
     QPushButton, QSpinBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
 from ..config import format_time, human_size
-from ..search import HL_END, HL_START, Filters, parse_exts, search
+from ..search import HL_END, HL_START, Filters, export_csv, get_content, mark_matches, parse_exts, search
+from ..settings import save_settings
 from .theme import HIGHLIGHT, open_path, reveal_in_folder
 
 
@@ -22,6 +23,15 @@ def snippet_to_html(text: str, color: str) -> str:
     safe = html.escape(text or "", quote=False).replace("\n", " ")
     safe = safe.replace(HL_START, f'<b style="color:{HIGHLIGHT}">').replace(HL_END, "</b>")
     return f'<span style="color:{color}">{safe}</span>'
+
+
+def preview_to_html(text: str, query: str) -> tuple[str, int]:
+    """Полный текст файла с подсветкой. Всё экранируется, подсветка — только по нашим маркерам."""
+    marked, n = mark_matches(text, query)
+    safe = html.escape(marked, quote=False)
+    safe = safe.replace(HL_START, f'<a name="m"></a><b style="color:{HIGHLIGHT}">', 1) if n else safe
+    safe = safe.replace(HL_START, f'<b style="color:{HIGHLIGHT}">').replace(HL_END, "</b>")
+    return f'<div style="white-space:pre-wrap">{safe}</div>', n
 
 
 class SnippetDelegate(QStyledItemDelegate):
@@ -61,6 +71,20 @@ class SearchTab(QWidget):
         row.addWidget(self.btn)
         lay.addLayout(row)
 
+        saved = QHBoxLayout()
+        self.saved = QComboBox()
+        self.saved.setMinimumWidth(220)
+        self.btn_save = QPushButton("Сохранить поиск")
+        self.btn_del = QPushButton("Удалить")
+        self.btn_csv = QPushButton("Экспорт в CSV")
+        saved.addWidget(QLabel("Сохранённые:"))
+        saved.addWidget(self.saved)
+        saved.addWidget(self.btn_save)
+        saved.addWidget(self.btn_del)
+        saved.addStretch(1)
+        saved.addWidget(self.btn_csv)
+        lay.addLayout(saved)
+
         self.filters_box = QGroupBox("Фильтры")
         self.filters_box.setCheckable(True)
         self.filters_box.setChecked(settings.filters_enabled)
@@ -91,7 +115,16 @@ class SearchTab(QWidget):
         self.table.setColumnWidth(1, 80)
         self.table.setColumnWidth(2, 130)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        lay.addWidget(self.table, 1)
+        self.preview = QTextBrowser()
+        self.preview.setOpenLinks(False)
+        self.preview.setPlaceholderText("Выберите файл в списке, чтобы увидеть его текст из индекса.")
+        split = QSplitter(Qt.Orientation.Vertical)
+        split.addWidget(self.table)
+        split.addWidget(self.preview)
+        split.setStretchFactor(0, 3)
+        split.setStretchFactor(1, 2)
+        lay.addWidget(split, 1)
+        self._results: list[dict] = []
         self.info = QLabel("Добавьте папки и нажмите «Индексировать», затем введите запрос.")
         lay.addWidget(self.info)
 
@@ -107,6 +140,12 @@ class SearchTab(QWidget):
         self.filters_box.toggled.connect(self._on_filters_toggled)
         self.table.doubleClicked.connect(lambda *_: self.open_selected())
         self.table.customContextMenuRequested.connect(self._menu)
+        self.table.itemSelectionChanged.connect(self.update_preview)
+        self.btn_save.clicked.connect(self.save_current)
+        self.btn_del.clicked.connect(self.delete_saved)
+        self.btn_csv.clicked.connect(self.export_results)
+        self.saved.activated.connect(self.load_saved)
+        self.refresh_saved()
 
     @staticmethod
     def _spin(special: str) -> QSpinBox:
@@ -129,6 +168,8 @@ class SearchTab(QWidget):
     def run_search(self) -> None:
         self._timer.stop()
         res = search(self.query.text(), self.current_filters())
+        self._results = res
+        self.preview.clear()
         self.table.setRowCount(len(res))
         for r, item in enumerate(res):
             path_item = QTableWidgetItem(item["path"])
@@ -164,3 +205,78 @@ class SearchTab(QWidget):
         m.addAction("Показать в папке", lambda: reveal_in_folder(p))
         m.addAction("Копировать путь", lambda: QGuiApplication.clipboard().setText(p))
         m.exec(self.table.viewport().mapToGlobal(pos))
+
+    # --- предпросмотр -------------------------------------------------------
+    def update_preview(self) -> None:
+        p = self.selected_path()
+        if not p:
+            self.preview.clear()
+            return
+        text = get_content(p)
+        if text is None:
+            self.preview.setPlainText("Файла нет в индексе.")
+        elif not text.strip():
+            self.preview.setPlainText("Для этого файла нет текста (картинка, архив, пустой файл и т. п.).")
+        else:
+            body, n = preview_to_html(text, self.query.text())
+            self.preview.setHtml(body)
+            if n:
+                self.preview.scrollToAnchor("m")
+
+    # --- сохранённые поиски -------------------------------------------------
+    def refresh_saved(self, select: str | None = None) -> None:
+        self.saved.blockSignals(True)
+        self.saved.clear()
+        self.saved.addItem("— выбрать —", None)
+        for e in self.settings.saved_searches:
+            self.saved.addItem(e["name"], e["name"])
+        if select:
+            self.saved.setCurrentIndex(max(0, self.saved.findData(select)))
+        self.saved.blockSignals(False)
+
+    def save_current(self) -> None:
+        q = self.query.text().strip()
+        if not q and not self.current_filters().active():
+            self.info.setText("Нечего сохранять: введите запрос или задайте фильтры.")
+            return
+        name, ok = QInputDialog.getText(self, "Сохранить поиск", "Название:", text=q[:40])
+        name = name.strip()
+        if not ok or not name:
+            return
+        self.settings.save_search({"name": name, "query": q, "exts": self.ext.text(), "min_kb": self.min_kb.value(),
+                                   "max_kb": self.max_kb.value(), "older": self.older.value(),
+                                   "filters": self.filters_box.isChecked()})
+        save_settings(self.settings)
+        self.refresh_saved(name)
+
+    def load_saved(self, _idx: int = 0) -> None:
+        name = self.saved.currentData()
+        entry = next((e for e in self.settings.saved_searches if e.get("name") == name), None)
+        if not entry:
+            return
+        self.ext.setText(str(entry.get("exts", "")))
+        self.min_kb.setValue(int(entry.get("min_kb", 0) or 0))
+        self.max_kb.setValue(int(entry.get("max_kb", 0) or 0))
+        self.older.setValue(int(entry.get("older", 0) or 0))
+        self.filters_box.setChecked(bool(entry.get("filters", False)))
+        self.query.setText(str(entry.get("query", "")))
+        self.run_search()
+
+    def delete_saved(self) -> None:
+        name = self.saved.currentData()
+        if not name:
+            return
+        if QMessageBox.question(self, "Удалить поиск", f"Удалить сохранённый поиск «{name}»?") == QMessageBox.StandardButton.Yes:
+            self.settings.delete_search(name)
+            save_settings(self.settings)
+            self.refresh_saved()
+
+    # --- экспорт ------------------------------------------------------------
+    def export_results(self) -> None:
+        if not self._results:
+            self.info.setText("Нет результатов для экспорта.")
+            return
+        dest, _ = QFileDialog.getSaveFileName(self, "Экспорт результатов", "filepilot-results.csv", "CSV (*.csv)")
+        if dest:
+            n = export_csv(self._results, dest)
+            self.info.setText(f"Сохранено строк: {n} → {dest}")

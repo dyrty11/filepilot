@@ -100,3 +100,42 @@ def search(query: str, filters: Filters | None = None, limit: int = 300) -> list
         "WHERE (f.name LIKE ? ESCAPE '\\' OR f.content LIKE ? ESCAPE '\\')" + _where(f, params) + " ORDER BY f.mtime DESC LIMIT ?"
     )
     return [dict(r) for r in conn.execute(sql, [like, like] + params + [limit])]
+
+
+PREVIEW_LIMIT = 300_000
+
+
+def get_content(path: str) -> str | None:
+    """Текст файла из индекса (None, если файла нет в индексе)."""
+    row = get_db().execute("SELECT substr(content, 1, ?) AS c FROM files WHERE path = ?", (PREVIEW_LIMIT, path)).fetchone()
+    return None if row is None else (row["c"] or "")
+
+
+def query_words(query: str) -> list[str]:
+    words: list[str] = []
+    for tok in re.findall(r'"[^"]+"|\S+', query or ""):
+        if tok in _OPS:
+            continue
+        words += [w for w in re.findall(r"\w+", tok) if w.upper() not in _OPS]
+    return sorted(set(words), key=len, reverse=True)
+
+
+def mark_matches(text: str, query: str) -> tuple[str, int]:
+    """Оборачивает найденные слова (с продолжением, как префиксный поиск) в маркеры подсветки. Возвращает (текст, число совпадений)."""
+    words = query_words(query)
+    if not words or not text:
+        return text, 0
+    rx = re.compile("(?:%s)\\w*" % "|".join(re.escape(w) for w in words), re.IGNORECASE)
+    return rx.subn(lambda m: HL_START + m.group(0) + HL_END, text)
+
+
+def export_csv(rows: list[dict], dest: str) -> int:
+    """Сохраняет результаты в CSV (UTF-8 с BOM, разделитель «;» — открывается в Excel)."""
+    import csv
+    from .config import format_time
+    with open(dest, "w", encoding="utf-8-sig", newline="") as fh:
+        w = csv.writer(fh, delimiter=";")
+        w.writerow(["Путь", "Имя", "Размер, байт", "Изменён"])
+        for r in rows:
+            w.writerow([r["path"], r["name"], r["size"], format_time(r["mtime"])])
+    return len(rows)

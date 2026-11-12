@@ -170,3 +170,37 @@ def test_cli_roundtrip(tmp_path, capsys):
     assert cli.main(["--json", "search", "договор"]) == 0
     out = capsys.readouterr().out
     assert "dogovor.txt" in out
+
+
+def test_preview_content_and_marks(tmp_path):
+    make_tree(tmp_path / "root")
+    indexer.index_folders([str(tmp_path / "root")])
+    path = str(tmp_path / "root" / "docs" / "dogovor.txt")
+    text = search.get_content(path)
+    assert "Договор поставки" in text
+    assert search.get_content(str(tmp_path / "нет.txt")) is None
+    marked, n = search.mark_matches(text, "договор AND 2024")
+    assert n == 2 and marked.count(search.HL_START) == 2
+    assert search.mark_matches(text, "")[1] == 0
+
+
+def test_export_csv(tmp_path):
+    make_tree(tmp_path / "root")
+    indexer.index_folders([str(tmp_path / "root")])
+    res = search.search("hello")
+    dest = tmp_path / "out.csv"
+    assert search.export_csv(res, str(dest)) == len(res) == 2
+    lines = dest.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[0].startswith("Путь;Имя") and len(lines) == 3
+
+
+def test_saved_searches_roundtrip():
+    s = Settings()
+    s.save_search({"name": "а", "query": "x"})
+    s.save_search({"name": "а", "query": "y"})  # перезапись по имени
+    s.save_search({"name": "б", "query": "z"})
+    save_settings(s)
+    s2 = load_settings()
+    assert [e["query"] for e in s2.saved_searches] == ["y", "z"]
+    s2.delete_search("а")
+    assert [e["name"] for e in s2.saved_searches] == ["б"]
