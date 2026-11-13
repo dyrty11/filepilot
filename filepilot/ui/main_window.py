@@ -1,7 +1,9 @@
 """Главное окно FilePilot."""
 from __future__ import annotations
 
+import os
 import sys
+import time
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction
@@ -9,8 +11,8 @@ from PySide6.QtWidgets import (
     QApplication, QLabel, QMainWindow, QMenu, QMessageBox, QProgressBar, QTabWidget, QToolBar, QToolButton,
 )
 
+from .. import __version__, db, indexer, updater
 from ..i18n import tr
-from .. import __version__, db, indexer
 from ..settings import load_settings, save_settings
 from .diskmap_tab import DiskMapTab
 from .duplicates_tab import DuplicatesTab
@@ -18,6 +20,7 @@ from .folders_dialog import FoldersDialog
 from .rules_tab import RulesTab
 from .search_tab import SearchTab
 from .theme import app_icon, apply_dark
+from .update_dialog import UpdateDialog
 from .workers import Task
 
 
@@ -70,6 +73,18 @@ class MainWindow(QMainWindow):
             act.triggered.connect(lambda _c=False, c=code: self._set_language(c))
         lang_btn.setMenu(lang_menu)
         tb.addWidget(lang_btn)
+        upd_btn = QToolButton()
+        upd_btn.setText(tr("Обновления"))
+        upd_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        upd_menu = QMenu(upd_btn)
+        upd_menu.addAction(tr("Проверить обновления"), lambda: self.check_updates(manual=True))
+        self.act_auto_update = upd_menu.addAction(tr("Проверять при запуске"))
+        self.act_auto_update.setCheckable(True)
+        self.act_auto_update.setChecked(self.settings.check_updates)
+        self.act_auto_update.triggered.connect(self._toggle_auto_update)
+        upd_btn.setMenu(upd_menu)
+        tb.addWidget(upd_btn)
+        self._update_task: Task | None = None
         self.act_find = QAction(self)
         self.act_find.setShortcut("Ctrl+F")
         self.act_find.triggered.connect(lambda: (self.tabs.setCurrentIndex(0), self.search_tab.query.setFocus()))
@@ -87,6 +102,46 @@ class MainWindow(QMainWindow):
 
         if self.settings.auto_index and self.settings.folders:
             QTimer.singleShot(400, self.start_index)
+        if self.settings.check_updates and updater.due(self.settings.last_update_check) and not os.environ.get("FILEPILOT_NO_UPDATE_CHECK"):
+            QTimer.singleShot(2500, lambda: self.check_updates(manual=False))
+
+    def _toggle_auto_update(self) -> None:
+        self.settings.check_updates = self.act_auto_update.isChecked()
+        save_settings(self.settings)
+
+    def check_updates(self, manual: bool = False, fetch=None) -> None:
+        """Проверка в фоне. Тихая при запуске: сообщает, только если есть новая версия."""
+        if self._update_task:
+            return
+        if manual:
+            self.status.setText(tr("Проверяю обновления…"))
+        self._update_task = Task(lambda progress, cancel: (fetch or updater.fetch_latest)(), self)
+        self._update_task.done.connect(lambda rel: self._update_checked(rel, manual))
+        self._update_task.failed.connect(lambda msg: self._update_failed(msg, manual))
+        self._update_task.start()
+
+    def _update_checked(self, rel, manual: bool) -> None:
+        self._update_task = None
+        self.settings.last_update_check = time.time()
+        save_settings(self.settings)
+        newer = rel is not None and updater.is_newer(rel.version)
+        if not newer:
+            if manual:
+                self.status.setText(tr("У вас последняя версия ({0}).").format(__version__))
+            return
+        if not manual and rel.version == self.settings.skipped_version:
+            return
+        self.status.setText(tr("Доступна версия {0}.").format(rel.version))
+        dlg = UpdateDialog(rel, self.settings, self)
+        dlg.exec()
+        save_settings(self.settings)
+        if dlg.installer_started:
+            self.close()
+
+    def _update_failed(self, msg: str, manual: bool) -> None:
+        self._update_task = None
+        if manual:
+            self.status.setText(tr("Не удалось проверить обновления: {0}").format(msg))
 
     def _set_language(self, code: str) -> None:
         self.settings.language = code
@@ -195,7 +250,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, e) -> None:
         save_settings(self.settings)
-        for t in (self._task, self.dupes_tab._task, self.rules_tab._task):
+        for t in (self._task, self.dupes_tab._task, self.rules_tab._task, self._update_task):
             if t is not None:
                 t.cancel()
                 t.wait(3000)

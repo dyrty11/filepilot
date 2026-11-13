@@ -67,3 +67,18 @@ def test_full_flow(app, tmp_path):
     w.disk_tab.refresh()
     assert w.disk_tab.table.rowCount() == 3
     w.close()
+
+
+def test_update_flow_in_window(app, monkeypatch):
+    from filepilot import updater as upd
+    from filepilot.ui import main_window as mw
+    shown = []
+    monkeypatch.setattr(mw.UpdateDialog, "exec", lambda self: shown.append(self.rel.version) or 0)
+    w = MainWindow()
+    w.check_updates(manual=True, fetch=lambda: upd.Release("9.9.9", "v9.9.9", "notes", "https://github.com/x"))
+    assert wait_until(lambda: w._update_task is None)
+    assert shown == ["9.9.9"]
+    w.check_updates(manual=True, fetch=lambda: upd.Release("0.0.1", "v0.0.1", "", "https://github.com/x"))
+    assert wait_until(lambda: w._update_task is None)
+    assert "последняя" in w.status.text()
+    w.close()

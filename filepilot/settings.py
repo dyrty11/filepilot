@@ -14,6 +14,9 @@ class Settings:
     auto_index: bool = False
     filters_enabled: bool = False
     language: str = "auto"  # auto | ru | en
+    check_updates: bool = True
+    last_update_check: float = 0.0
+    skipped_version: str = ""
     saved_searches: list[dict] = field(default_factory=list)  # {name, query, exts, min_kb, max_kb, older}
 
     def save_search(self, entry: dict) -> None:
@@ -51,6 +54,9 @@ def load_settings() -> Settings:
         auto_index=bool(data.get("auto_index", False)),
         filters_enabled=bool(data.get("filters_enabled", False)),
         language=data.get("language") if data.get("language") in ("ru", "en") else "auto",
+        check_updates=bool(data.get("check_updates", True)),
+        last_update_check=float(data.get("last_update_check") or 0) if isinstance(data.get("last_update_check"), (int, float)) else 0.0,
+        skipped_version=str(data.get("skipped_version") or ""),
         saved_searches=[e for e in (data.get("saved_searches") or []) if isinstance(e, dict) and e.get("name")],
     )
 
