@@ -182,4 +182,7 @@ EN = {
     "Каждые 15 минут": "Every 15 minutes",
     "Каждый час": "Every hour",
     "Каждые 6 часов": "Every 6 hours",
+    "FilePilot обновлён": "FilePilot updated",
+    "Установлена версия {0}.": "Version {0} is installed.",
+    "Была: {0}.": "Was: {0}.",
 }

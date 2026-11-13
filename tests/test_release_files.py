@@ -27,3 +27,9 @@ def test_release_notes_section():
     log = "# История\n\n## Не выпущено\n- новое\n\n## 0.2.0\nПрограмма.\n- а\n\n## 0.1.0\n- старое\n"
     assert release_notes.section("0.2.0", log) == "Программа.\n- а"
     assert release_notes.section("9.9.9", log) == ""
+
+
+def test_changelog_bundled_and_has_current_version():
+    from filepilot import changelog
+    assert "CHANGELOG.md" in (ROOT / "filepilot.spec").read_text(encoding="utf-8")
+    assert changelog.notes_for(__version__), f"в CHANGELOG.md нет раздела для версии {__version__}"

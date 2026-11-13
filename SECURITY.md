@@ -5,5 +5,5 @@
 Скачивайте программу только со страницы **Releases** этого репозитория и сверяйте SHA-256 из `SHA256SUMS.txt`:
 
 ```
-Get-FileHash .\FilePilotSetup-0.4.0.exe -Algorithm SHA256
+Get-FileHash .\FilePilotSetup-0.4.1.exe -Algorithm SHA256
 ```

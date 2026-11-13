@@ -120,3 +120,39 @@ def test_keep_rule_marking_and_background_timer(app):
     w.set_reindex_minutes(0)
     assert not w._bg_timer.isActive()
     w.close()
+
+
+def test_whats_new_after_update(app, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from filepilot import __version__
+    from filepilot.settings import Settings, load_settings, save_settings
+    shown = []
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: shown.append(self.informativeText()) or 0)
+
+    # первая установка (файла настроек нет): тихо запоминаем версию
+    w = MainWindow()
+    assert w._had_settings_file is False
+    assert w.check_whats_new() is False and not shown
+    assert load_settings().last_seen_version == __version__
+    assert w.check_whats_new() is False   # повторный запуск той же версии: тишина
+    w.close()
+
+    # обновление с предыдущей версии: уведомление и «Что нового»
+    s = load_settings(); s.last_seen_version = "0.1.0"; save_settings(s)
+    w = MainWindow()
+    assert w.check_whats_new() is True
+    assert shown and "Что нового" in shown[0]
+    w.close()
+
+    # настройки от версии без этого поля (старше 0.4.0): тоже считается обновлением
+    s = load_settings(); s.last_seen_version = ""; save_settings(s)
+    w = MainWindow()
+    assert w.check_whats_new() is True
+    w.close()
+
+    # откат на старую версию: молчим
+    s = load_settings(); s.last_seen_version = "99.0.0"; save_settings(s)
+    shown.clear()
+    w = MainWindow()
+    assert w.check_whats_new() is False and not shown
+    w.close()

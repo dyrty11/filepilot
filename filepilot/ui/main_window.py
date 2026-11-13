@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
     QApplication, QLabel, QMainWindow, QMenu, QMessageBox, QProgressBar, QTabWidget, QToolBar, QToolButton,
 )
 
-from .. import __version__, db, indexer, updater
+from .. import __version__, changelog, db, indexer, updater
+from ..config import settings_path
 from ..i18n import tr
 from ..settings import load_settings, save_settings
 from .diskmap_tab import DiskMapTab
@@ -30,6 +31,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("FilePilot")
         self.setWindowIcon(app_icon())
         self.resize(1100, 730)
+        self._had_settings_file = settings_path().exists()  # нет файла = первая установка
         self.settings = load_settings()
         self._task: Task | None = None
 
@@ -119,8 +121,44 @@ class MainWindow(QMainWindow):
 
         if self.settings.auto_index and self.settings.folders:
             QTimer.singleShot(400, self.start_index)
+        if not os.environ.get("FILEPILOT_NO_UPDATE_CHECK"):
+            QTimer.singleShot(1200, self.check_whats_new)
         if self.settings.check_updates and updater.due(self.settings.last_update_check) and not os.environ.get("FILEPILOT_NO_UPDATE_CHECK"):
             QTimer.singleShot(2500, lambda: self.check_updates(manual=False))
+
+    def check_whats_new(self) -> bool:
+        """После обновления (установщик, скачанный заново, или автообновление) показывает уведомление и «Что нового».
+        Первая установка (нет файла настроек) ничего не показывает. Возвращает True, если уведомление показано."""
+        cur, seen = __version__, self.settings.last_seen_version
+        self.settings.last_seen_version = cur
+        save_settings(self.settings)
+        if seen == cur or (not seen and not self._had_settings_file):
+            return False
+        if seen and not updater.is_newer(cur, seen):
+            return False  # откат на старую версию: молчим
+        self._toast(tr("FilePilot обновлён"), tr("Установлена версия {0}.").format(cur))
+        notes = changelog.notes_for(cur)
+        text = tr("Установлена версия {0}.").format(cur) + (("\n" + tr("Была: {0}.").format(seen)) if seen else "")
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("FilePilot обновлён"))
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setText(text)
+        box.setInformativeText(tr("Что нового:") + "\n" + (notes or tr("Описание не указано.")))
+        box.exec()
+        return True
+
+    def _toast(self, title: str, message: str) -> None:
+        """Системное уведомление Windows через временный значок в трее."""
+        try:
+            from PySide6.QtWidgets import QSystemTrayIcon
+            if not QSystemTrayIcon.isSystemTrayAvailable():
+                return
+            tray = QSystemTrayIcon(self.windowIcon(), self)
+            tray.show()
+            tray.showMessage(title, message, QSystemTrayIcon.MessageIcon.Information, 6000)
+            QTimer.singleShot(9000, tray.hide)
+        except Exception:  # noqa: BLE001  уведомление необязательно
+            pass
 
     def set_reindex_minutes(self, minutes: int) -> None:
         self.settings.reindex_minutes = minutes

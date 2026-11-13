@@ -18,6 +18,7 @@ class Settings:
     check_updates: bool = True
     last_update_check: float = 0.0
     skipped_version: str = ""
+    last_seen_version: str = ""  # версия, при последнем запуске которой показали «Что нового»
     saved_searches: list[dict] = field(default_factory=list)  # {name, query, exts, min_kb, max_kb, older}
 
     def save_search(self, entry: dict) -> None:
@@ -59,6 +60,7 @@ def load_settings() -> Settings:
         check_updates=bool(data.get("check_updates", True)),
         last_update_check=float(data.get("last_update_check") or 0) if isinstance(data.get("last_update_check"), (int, float)) else 0.0,
         skipped_version=str(data.get("skipped_version") or ""),
+        last_seen_version=str(data.get("last_seen_version") or ""),
         saved_searches=[e for e in (data.get("saved_searches") or []) if isinstance(e, dict) and e.get("name")],
     )
 

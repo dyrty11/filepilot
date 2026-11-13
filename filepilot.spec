@@ -10,7 +10,7 @@ a = Analysis(
     ["run.py"],
     pathex=[],
     binaries=[],
-    datas=[("assets/icon.png", "assets"), ("assets/icon.ico", "assets")],
+    datas=[("assets/icon.png", "assets"), ("assets/icon.ico", "assets"), ("CHANGELOG.md", ".")],
     hiddenimports=collect_submodules("pypdf") + collect_submodules("send2trash"),
     hookspath=[],
     runtime_hooks=[],
