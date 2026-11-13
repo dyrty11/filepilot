@@ -133,9 +133,10 @@ def export_csv(rows: list[dict], dest: str) -> int:
     """Сохраняет результаты в CSV (UTF-8 с BOM, разделитель «;» — открывается в Excel)."""
     import csv
     from .config import format_time
+    from .i18n import tr
     with open(dest, "w", encoding="utf-8-sig", newline="") as fh:
         w = csv.writer(fh, delimiter=";")
-        w.writerow(["Путь", "Имя", "Размер, байт", "Изменён"])
+        w.writerow([tr("Путь"), tr("Имя"), tr("Размер, байт"), tr("Изменён")])
         for r in rows:
             w.writerow([r["path"], r["name"], r["size"], format_time(r["mtime"])])
     return len(rows)

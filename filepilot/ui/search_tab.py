@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from ..i18n import tr
 from ..config import format_time, human_size
 from ..search import HL_END, HL_START, Filters, export_csv, get_content, mark_matches, parse_exts, search
 from ..settings import save_settings
@@ -63,9 +64,9 @@ class SearchTab(QWidget):
 
         row = QHBoxLayout()
         self.query = QLineEdit()
-        self.query.setPlaceholderText('Поиск по содержимому, например "договор 2024" (кавычки: точная фраза)')
+        self.query.setPlaceholderText(tr('Поиск по содержимому, например "договор 2024" (кавычки: точная фраза)'))
         self.query.setClearButtonEnabled(True)
-        self.btn = QPushButton("Найти")
+        self.btn = QPushButton(tr("Найти"))
         self.btn.setObjectName("primary")
         row.addWidget(self.query, 1)
         row.addWidget(self.btn)
@@ -74,10 +75,10 @@ class SearchTab(QWidget):
         saved = QHBoxLayout()
         self.saved = QComboBox()
         self.saved.setMinimumWidth(220)
-        self.btn_save = QPushButton("Сохранить поиск")
-        self.btn_del = QPushButton("Удалить")
-        self.btn_csv = QPushButton("Экспорт в CSV")
-        saved.addWidget(QLabel("Сохранённые:"))
+        self.btn_save = QPushButton(tr("Сохранить поиск"))
+        self.btn_del = QPushButton(tr("Удалить"))
+        self.btn_csv = QPushButton(tr("Экспорт в CSV"))
+        saved.addWidget(QLabel(tr("Сохранённые:")))
         saved.addWidget(self.saved)
         saved.addWidget(self.btn_save)
         saved.addWidget(self.btn_del)
@@ -85,7 +86,7 @@ class SearchTab(QWidget):
         saved.addWidget(self.btn_csv)
         lay.addLayout(saved)
 
-        self.filters_box = QGroupBox("Фильтры")
+        self.filters_box = QGroupBox(tr("Фильтры"))
         self.filters_box.setCheckable(True)
         self.filters_box.setChecked(settings.filters_enabled)
         fl = QHBoxLayout(self.filters_box)
@@ -95,14 +96,14 @@ class SearchTab(QWidget):
         self.min_kb = self._spin("—")
         self.max_kb = self._spin("—")
         self.older = self._spin("—")
-        for text, w in (("Расширения:", self.ext), ("Мин. КБ:", self.min_kb), ("Макс. КБ:", self.max_kb), ("Старше (дн.):", self.older)):
+        for text, w in ((tr("Расширения:"), self.ext), (tr("Мин. КБ:"), self.min_kb), (tr("Макс. КБ:"), self.max_kb), (tr("Старше (дн.):"), self.older)):
             fl.addWidget(QLabel(text))
             fl.addWidget(w)
         fl.addStretch(1)
         lay.addWidget(self.filters_box)
 
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Путь", "Размер", "Изменён", "Фрагмент"])
+        self.table.setHorizontalHeaderLabels([tr("Путь"), tr("Размер"), tr("Изменён"), tr("Фрагмент")])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setAlternatingRowColors(True)
@@ -117,7 +118,7 @@ class SearchTab(QWidget):
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.preview = QTextBrowser()
         self.preview.setOpenLinks(False)
-        self.preview.setPlaceholderText("Выберите файл в списке, чтобы увидеть его текст из индекса.")
+        self.preview.setPlaceholderText(tr("Выберите файл в списке, чтобы увидеть его текст из индекса."))
         split = QSplitter(Qt.Orientation.Vertical)
         split.addWidget(self.table)
         split.addWidget(self.preview)
@@ -125,7 +126,7 @@ class SearchTab(QWidget):
         split.setStretchFactor(1, 2)
         lay.addWidget(split, 1)
         self._results: list[dict] = []
-        self.info = QLabel("Добавьте папки и нажмите «Индексировать», затем введите запрос.")
+        self.info = QLabel(tr("Добавьте папки и нажмите «Индексировать», затем введите запрос."))
         lay.addWidget(self.info)
 
         self._timer = QTimer(self, singleShot=True, interval=350)
@@ -181,9 +182,9 @@ class SearchTab(QWidget):
             for c, it in enumerate((path_item, size_item, QTableWidgetItem(format_time(item["mtime"])), snip)):
                 self.table.setItem(r, c, it)
         if not self.query.text().strip() and not self.current_filters().active():
-            self.info.setText("Введите запрос или задайте фильтры.")
+            self.info.setText(tr("Введите запрос или задайте фильтры."))
         else:
-            self.info.setText(f"Найдено: {len(res)}" + (" (показаны первые 300)" if len(res) >= 300 else ""))
+            self.info.setText(tr('Найдено: {0}').format(len(res)) + (tr(" (показаны первые 300)") if len(res) >= 300 else ""))
 
     def selected_path(self) -> str | None:
         rows = self.table.selectionModel().selectedRows()
@@ -194,16 +195,16 @@ class SearchTab(QWidget):
         if p and Path(p).exists():
             open_path(p)
         elif p:
-            self.info.setText("Файл не найден: возможно, он удалён. Нажмите «Индексировать».")
+            self.info.setText(tr("Файл не найден: возможно, он удалён. Нажмите «Индексировать»."))
 
     def _menu(self, pos) -> None:
         p = self.selected_path()
         if not p:
             return
         m = QMenu(self)
-        m.addAction("Открыть", self.open_selected)
-        m.addAction("Показать в папке", lambda: reveal_in_folder(p))
-        m.addAction("Копировать путь", lambda: QGuiApplication.clipboard().setText(p))
+        m.addAction(tr("Открыть"), self.open_selected)
+        m.addAction(tr("Показать в папке"), lambda: reveal_in_folder(p))
+        m.addAction(tr("Копировать путь"), lambda: QGuiApplication.clipboard().setText(p))
         m.exec(self.table.viewport().mapToGlobal(pos))
 
     # --- предпросмотр -------------------------------------------------------
@@ -214,9 +215,9 @@ class SearchTab(QWidget):
             return
         text = get_content(p)
         if text is None:
-            self.preview.setPlainText("Файла нет в индексе.")
+            self.preview.setPlainText(tr("Файла нет в индексе."))
         elif not text.strip():
-            self.preview.setPlainText("Для этого файла нет текста (картинка, архив, пустой файл и т. п.).")
+            self.preview.setPlainText(tr("Для этого файла нет текста (картинка, архив, пустой файл и т. п.)."))
         else:
             body, n = preview_to_html(text, self.query.text())
             self.preview.setHtml(body)
@@ -227,7 +228,7 @@ class SearchTab(QWidget):
     def refresh_saved(self, select: str | None = None) -> None:
         self.saved.blockSignals(True)
         self.saved.clear()
-        self.saved.addItem("— выбрать —", None)
+        self.saved.addItem(tr("— выбрать —"), None)
         for e in self.settings.saved_searches:
             self.saved.addItem(e["name"], e["name"])
         if select:
@@ -237,9 +238,9 @@ class SearchTab(QWidget):
     def save_current(self) -> None:
         q = self.query.text().strip()
         if not q and not self.current_filters().active():
-            self.info.setText("Нечего сохранять: введите запрос или задайте фильтры.")
+            self.info.setText(tr("Нечего сохранять: введите запрос или задайте фильтры."))
             return
-        name, ok = QInputDialog.getText(self, "Сохранить поиск", "Название:", text=q[:40])
+        name, ok = QInputDialog.getText(self, tr("Сохранить поиск"), tr("Название:"), text=q[:40])
         name = name.strip()
         if not ok or not name:
             return
@@ -266,7 +267,7 @@ class SearchTab(QWidget):
         name = self.saved.currentData()
         if not name:
             return
-        if QMessageBox.question(self, "Удалить поиск", f"Удалить сохранённый поиск «{name}»?") == QMessageBox.StandardButton.Yes:
+        if QMessageBox.question(self, tr("Удалить поиск"), tr('Удалить сохранённый поиск «{0}»?').format(name)) == QMessageBox.StandardButton.Yes:
             self.settings.delete_search(name)
             save_settings(self.settings)
             self.refresh_saved()
@@ -274,9 +275,9 @@ class SearchTab(QWidget):
     # --- экспорт ------------------------------------------------------------
     def export_results(self) -> None:
         if not self._results:
-            self.info.setText("Нет результатов для экспорта.")
+            self.info.setText(tr("Нет результатов для экспорта."))
             return
-        dest, _ = QFileDialog.getSaveFileName(self, "Экспорт результатов", "filepilot-results.csv", "CSV (*.csv)")
+        dest, _ = QFileDialog.getSaveFileName(self, tr("Экспорт результатов"), "filepilot-results.csv", "CSV (*.csv)")
         if dest:
             n = export_csv(self._results, dest)
-            self.info.setText(f"Сохранено строк: {n} → {dest}")
+            self.info.setText(tr('Сохранено строк: {0} → {1}').format(n, dest))

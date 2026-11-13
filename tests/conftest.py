@@ -9,3 +9,11 @@ def isolated_data(tmp_path, monkeypatch):
     db.close_db()
     yield
     db.close_db()
+
+
+@pytest.fixture(autouse=True)
+def russian_ui():
+    from filepilot import i18n
+    i18n.set_language("ru")
+    yield
+    i18n.set_language("ru")

@@ -83,12 +83,13 @@ _UNITS = ["Б", "КБ", "МБ", "ГБ", "ТБ"]
 def human_size(n: int | None) -> str:
     if n is None:
         return ""
+    from .i18n import tr
     x = float(n)
     for u in _UNITS:
         if x < 1024 or u == _UNITS[-1]:
-            return f"{int(x)} {u}" if u == "Б" else f"{x:.1f} {u}"
+            return f"{int(x)} {tr(u)}" if u == "Б" else f"{x:.1f} {tr(u)}"
         x /= 1024
-    return f"{x:.1f} ТБ"
+    return f"{x:.1f} {tr('ТБ')}"
 
 
 def format_time(ts: float | None) -> str:

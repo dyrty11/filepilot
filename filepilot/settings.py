@@ -13,6 +13,7 @@ class Settings:
     folders: list[str] = field(default_factory=list)
     auto_index: bool = False
     filters_enabled: bool = False
+    language: str = "auto"  # auto | ru | en
     saved_searches: list[dict] = field(default_factory=list)  # {name, query, exts, min_kb, max_kb, older}
 
     def save_search(self, entry: dict) -> None:
@@ -49,6 +50,7 @@ def load_settings() -> Settings:
         folders=[str(f) for f in folders] if isinstance(folders, list) else [],
         auto_index=bool(data.get("auto_index", False)),
         filters_enabled=bool(data.get("filters_enabled", False)),
+        language=data.get("language") if data.get("language") in ("ru", "en") else "auto",
         saved_searches=[e for e in (data.get("saved_searches") or []) if isinstance(e, dict) and e.get("name")],
     )
 

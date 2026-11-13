@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
+from ..i18n import tr
 from .. import diskmap
 from ..config import format_time, human_size
 from .theme import ACCENT, reveal_in_folder
@@ -26,6 +27,11 @@ class BarDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
 
 
+def _loc(name: str) -> str:
+    """Служебные подписи из diskmap.py показываем на выбранном языке."""
+    return name.replace(tr("(файлы в корне)"), tr(tr("(файлы в корне)"))).replace(tr("(без расширения)"), tr(tr("(без расширения)")))
+
+
 class DiskMapTab(QWidget):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
@@ -34,7 +40,7 @@ class DiskMapTab(QWidget):
         row = QHBoxLayout()
         self.group = QButtonGroup(self)
         self.modes = {}
-        for key, label in (("files", "Крупные файлы"), ("folders", "Папки"), ("types", "Типы файлов")):
+        for key, label in (("files", tr("Крупные файлы")), ("folders", tr("Папки")), ("types", tr("Типы файлов"))):
             rb = QRadioButton(label)
             self.group.addButton(rb)
             self.modes[key] = rb
@@ -77,16 +83,16 @@ class DiskMapTab(QWidget):
         if self.modes["files"].isChecked():
             data = diskmap.top_files(200)
             top = data[0]["size"] if data else 1
-            self._fill(["Файл", "Размер", "Изменён"], [[(d["path"], None), (human_size(d["size"]), d["size"] / (top or 1)), (format_time(d["mtime"]), None)] for d in data])
-            self.info.setText(f"Показано файлов: {len(data)} (самые крупные). Двойной щелчок покажет файл в папке.")
+            self._fill([tr("Файл"), tr("Размер"), tr("Изменён")], [[(d["path"], None), (human_size(d["size"]), d["size"] / (top or 1)), (format_time(d["mtime"]), None)] for d in data])
+            self.info.setText(tr('Показано файлов: {0} (самые крупные). Двойной щелчок покажет файл в папке.').format(len(data)))
         elif self.modes["folders"].isChecked():
             data = diskmap.by_folder(self.settings.folders)
-            self._fill(["Папка", "Размер", "Файлов", "Доля"], [[(d["folder"], None), (human_size(d["size"]), d["share"]), (str(d["files"]), None), (f"{d['share'] * 100:.1f}%", None)] for d in data])
-            self.info.setText("Размер по папкам первого уровня внутри добавленных папок." if data else "Добавьте папки и проиндексируйте их.")
+            self._fill([tr("Папка"), tr("Размер"), tr("Файлов"), tr("Доля")], [[(_loc(d["folder"]), None), (human_size(d["size"]), d["share"]), (str(d["files"]), None), (f"{d['share'] * 100:.1f}%", None)] for d in data])
+            self.info.setText(tr("Размер по папкам первого уровня внутри добавленных папок.") if data else tr("Добавьте папки и проиндексируйте их."))
         else:
             data = diskmap.by_type()
-            self._fill(["Тип", "Размер", "Файлов", "Доля"], [[(d["ext"], None), (human_size(d["size"]), d["share"]), (str(d["files"]), None), (f"{d['share'] * 100:.1f}%", None)] for d in data])
-            self.info.setText("Какие типы файлов занимают больше всего места.")
+            self._fill([tr("Тип"), tr("Размер"), tr("Файлов"), tr("Доля")], [[(_loc(d["ext"]), None), (human_size(d["size"]), d["share"]), (str(d["files"]), None), (f"{d['share'] * 100:.1f}%", None)] for d in data])
+            self.info.setText(tr("Какие типы файлов занимают больше всего места."))
 
     def _reveal(self, *_):
         if not self.modes["files"].isChecked():

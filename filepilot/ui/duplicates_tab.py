@@ -6,16 +6,11 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
+from ..i18n import tr
 from .. import duplicates
 from ..config import human_size
+from ..i18n import plural
 from .workers import Task
-
-
-def plural(n: int, one: str, few: str, many: str) -> str:
-    n10, n100 = n % 10, n % 100
-    if n10 == 1 and n100 != 11:
-        return one
-    return few if 2 <= n10 <= 4 and not 12 <= n100 <= 14 else many
 
 
 class DuplicatesTab(QWidget):
@@ -25,13 +20,13 @@ class DuplicatesTab(QWidget):
         self._task: Task | None = None
         lay = QVBoxLayout(self)
         row = QHBoxLayout()
-        self.btn_find = QPushButton("Найти дубликаты")
+        self.btn_find = QPushButton(tr("Найти дубликаты"))
         self.btn_find.setObjectName("primary")
-        self.btn_cancel = QPushButton("Отменить")
+        self.btn_cancel = QPushButton(tr("Отменить"))
         self.btn_cancel.setEnabled(False)
-        self.btn_mark = QPushButton("Отметить все копии, кроме первой")
-        self.btn_unmark = QPushButton("Снять отметки")
-        self.btn_trash = QPushButton("Удалить отмеченные в корзину")
+        self.btn_mark = QPushButton(tr("Отметить все копии, кроме первой"))
+        self.btn_unmark = QPushButton(tr("Снять отметки"))
+        self.btn_trash = QPushButton(tr("Удалить отмеченные в корзину"))
         for b in (self.btn_find, self.btn_cancel, self.btn_mark, self.btn_unmark):
             row.addWidget(b)
         row.addStretch(1)
@@ -41,10 +36,10 @@ class DuplicatesTab(QWidget):
         self.bar.setVisible(False)
         lay.addWidget(self.bar)
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Файл", "Размер"])
+        self.tree.setHeaderLabels([tr("Файл"), tr("Размер")])
         self.tree.setColumnWidth(0, 640)
         lay.addWidget(self.tree, 1)
-        self.info = QLabel("Нажмите «Найти дубликаты»: сравниваются файлы из индекса по содержимому.")
+        self.info = QLabel(tr("Нажмите «Найти дубликаты»: сравниваются файлы из индекса по содержимому."))
         lay.addWidget(self.info)
         self.btn_find.clicked.connect(self.start)
         self.btn_cancel.clicked.connect(lambda: self._task and self._task.cancel())
@@ -59,7 +54,7 @@ class DuplicatesTab(QWidget):
         self.btn_cancel.setEnabled(True)
         self.bar.setVisible(True)
         self.bar.setRange(0, 0)
-        self.info.setText("Ищу дубликаты…")
+        self.info.setText(tr("Ищу дубликаты…"))
 
         def job(progress, cancel):
             return duplicates.find_duplicates(on_progress=lambda i, n: progress(i, n, ""), should_cancel=cancel)
@@ -67,7 +62,7 @@ class DuplicatesTab(QWidget):
         self._task = Task(job, self)
         self._task.progress.connect(lambda i, n, _: (self.bar.setRange(0, max(n, 1)), self.bar.setValue(i)))
         self._task.done.connect(self._finished)
-        self._task.failed.connect(lambda m: (self._reset(), self.info.setText(f"Ошибка: {m}")))
+        self._task.failed.connect(lambda m: (self._reset(), self.info.setText(tr('Ошибка: {0}').format(m))))
         self._task.start()
 
     def _reset(self) -> None:
@@ -84,7 +79,7 @@ class DuplicatesTab(QWidget):
         for g in groups:
             saved += g["size"] * (len(g["files"]) - 1)
             n = len(g["files"])
-            top = QTreeWidgetItem([f"{n} {plural(n, 'копия', 'копии', 'копий')} по {human_size(g['size'])} (можно освободить {human_size(g['size'] * (n - 1))})", ""])
+            top = QTreeWidgetItem([tr('{0} {1} по {2} (можно освободить {3})').format(n, plural(n, ('copy', 'copies'), ('копия', 'копии', 'копий')), human_size(g['size']), human_size(g['size'] * (n - 1))), ""])
             top.setFirstColumnSpanned(False)
             self.tree.addTopLevelItem(top)
             for p in g["files"]:
@@ -93,7 +88,7 @@ class DuplicatesTab(QWidget):
                 ch.setCheckState(0, Qt.CheckState.Unchecked)
                 top.addChild(ch)
             top.setExpanded(True)
-        self.info.setText(f"Групп дубликатов: {len(groups)}. Можно освободить: {human_size(saved)}." if groups else "Дубликатов нет.")
+        self.info.setText(tr('Групп дубликатов: {0}. Можно освободить: {1}.').format(len(groups), human_size(saved)) if groups else tr("Дубликатов нет."))
 
     def _children(self):
         for i in range(self.tree.topLevelItemCount()):
@@ -116,14 +111,14 @@ class DuplicatesTab(QWidget):
             groups.append([k.text(0) for k in kids])
             selected.update(k.text(0) for k in kids if k.checkState(0) == Qt.CheckState.Checked)
         if not selected:
-            self.info.setText("Ничего не отмечено.")
+            self.info.setText(tr("Ничего не отмечено."))
             return
-        ok = QMessageBox.question(self, "FilePilot", f"Отправить в корзину файлов: {len(selected)}?\nВ каждой группе останется хотя бы одна копия.")
+        ok = QMessageBox.question(self, "FilePilot", tr('Отправить в корзину файлов: {0}?\nВ каждой группе останется хотя бы одна копия.').format(len(selected)))
         if ok != QMessageBox.StandardButton.Yes:
             return
         done, errors = duplicates.trash_selected(groups, selected)
-        msg = f"Отправлено в корзину: {len(done)}."
+        msg = tr('Отправлено в корзину: {0}.').format(len(done))
         if errors:
-            msg += f" Ошибок: {len(errors)} (например: {errors[0][1]})"
+            msg += tr(' Ошибок: {0} (например: {1})').format(len(errors), errors[0][1])
         self.info.setText(msg)
         self.start()
