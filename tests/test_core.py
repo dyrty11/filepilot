@@ -210,3 +210,31 @@ def test_group_top():
     top, other = diskmap.group_top([("a", 50), ("b", 30), ("c", 10), ("d", 6), ("e", 4), ("z", 0)], top=3)
     assert top == [("a", 50), ("b", 30), ("c", 10)] and other == 10
     assert diskmap.group_top([], 3) == ([], 0)
+
+
+def test_choose_keep_rules(tmp_path):
+    import os
+    from filepilot import duplicates
+    a, b, c = tmp_path / "b" / "long_name_copy.txt", tmp_path / "a.txt", tmp_path / "c.txt"
+    a.parent.mkdir()
+    for i, f in enumerate((a, b, c)):
+        f.write_text("x")
+        os.utime(f, (1_000_000 + i * 100, 1_000_000 + i * 100))   # a — самый старый, c — самый новый
+    files = [str(a), str(b), str(c)]
+    assert duplicates.choose_keep(files, "first") == sorted(files)[0]
+    assert duplicates.choose_keep(files, "oldest") == str(a)
+    assert duplicates.choose_keep(files, "newest") == str(c)
+    assert duplicates.choose_keep(files, "shortest") == str(b)
+    assert duplicates.choose_keep(files, "что-то непонятное") == sorted(files)[0]
+    assert duplicates.choose_keep([str(tmp_path / "нет.txt"), str(b)], "newest") == str(b)  # недоступный файл не оставляем
+
+
+def test_reindex_setting_validated():
+    s = Settings(reindex_minutes=60)
+    save_settings(s)
+    assert load_settings().reindex_minutes == 60
+    import json
+    from filepilot.config import settings_path
+    d = json.loads(settings_path().read_text(encoding="utf-8")); d["reindex_minutes"] = 7
+    settings_path().write_text(json.dumps(d), encoding="utf-8")
+    assert load_settings().reindex_minutes == 0

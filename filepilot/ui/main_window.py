@@ -61,6 +61,23 @@ class MainWindow(QMainWindow):
         self.act_auto = self._action(tb, tr("Автоиндекс при запуске"), self._toggle_auto, tr("Индексировать папки при каждом запуске"))
         self.act_auto.setCheckable(True)
         self.act_auto.setChecked(self.settings.auto_index)
+        bg_btn = QToolButton()
+        bg_btn.setText(tr("Фоновое обновление"))
+        bg_btn.setToolTip(tr("Периодически обновлять индекс, пока программа открыта"))
+        bg_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        bg_menu = QMenu(bg_btn)
+        self._bg_actions = {}
+        for minutes, label in ((0, tr("Выключено")), (15, tr("Каждые 15 минут")), (60, tr("Каждый час")), (360, tr("Каждые 6 часов"))):
+            act = bg_menu.addAction(label)
+            act.setCheckable(True)
+            act.setChecked(self.settings.reindex_minutes == minutes)
+            act.triggered.connect(lambda _c=False, m=minutes: self.set_reindex_minutes(m))
+            self._bg_actions[minutes] = act
+        bg_btn.setMenu(bg_menu)
+        tb.addWidget(bg_btn)
+        self._bg_timer = QTimer(self)
+        self._bg_timer.timeout.connect(self._background_index)
+        self._apply_reindex_timer()
         tb.addSeparator()
         lang_btn = QToolButton()
         lang_btn.setText("Language / Язык")
@@ -104,6 +121,24 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(400, self.start_index)
         if self.settings.check_updates and updater.due(self.settings.last_update_check) and not os.environ.get("FILEPILOT_NO_UPDATE_CHECK"):
             QTimer.singleShot(2500, lambda: self.check_updates(manual=False))
+
+    def set_reindex_minutes(self, minutes: int) -> None:
+        self.settings.reindex_minutes = minutes
+        save_settings(self.settings)
+        for m, act in self._bg_actions.items():
+            act.setChecked(m == minutes)
+        self._apply_reindex_timer()
+
+    def _apply_reindex_timer(self) -> None:
+        if self.settings.reindex_minutes:
+            self._bg_timer.start(self.settings.reindex_minutes * 60_000)
+        else:
+            self._bg_timer.stop()
+
+    def _background_index(self) -> None:
+        # пропускаем, если уже что-то идёт; интерфейс не блокируется
+        if not self._task and self.settings.folders:
+            self.start_index()
 
     def _toggle_auto_update(self) -> None:
         self.settings.check_updates = self.act_auto_update.isChecked()

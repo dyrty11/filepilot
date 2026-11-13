@@ -14,6 +14,7 @@ class Settings:
     auto_index: bool = False
     filters_enabled: bool = False
     language: str = "auto"  # auto | ru | en
+    reindex_minutes: int = 0  # фоновое обновление индекса: 0 (выкл.), 15, 60, 360
     check_updates: bool = True
     last_update_check: float = 0.0
     skipped_version: str = ""
@@ -54,6 +55,7 @@ def load_settings() -> Settings:
         auto_index=bool(data.get("auto_index", False)),
         filters_enabled=bool(data.get("filters_enabled", False)),
         language=data.get("language") if data.get("language") in ("ru", "en") else "auto",
+        reindex_minutes=data.get("reindex_minutes") if data.get("reindex_minutes") in (15, 60, 360) else 0,
         check_updates=bool(data.get("check_updates", True)),
         last_update_check=float(data.get("last_update_check") or 0) if isinstance(data.get("last_update_check"), (int, float)) else 0.0,
         skipped_version=str(data.get("skipped_version") or ""),

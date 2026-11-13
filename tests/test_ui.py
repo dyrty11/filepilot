@@ -102,3 +102,21 @@ def test_donut_chart_geometry_and_english_labels(app, tmp_path):
     ch.grab()
     i18n.set_language("en")
     assert _loc("(без расширения)") == "(no extension)"
+
+
+def test_keep_rule_marking_and_background_timer(app):
+    w = MainWindow()
+    tab = w.dupes_tab
+    from PySide6.QtWidgets import QTreeWidgetItem
+    tab._finished([{"hash": "h", "size": 5, "files": ["/x/a.txt", "/x/longer/b.txt"]}])
+    tab.mark_duplicates("shortest")
+    kids = next(tab._children())
+    assert [k.checkState(0).name for k in kids] == ["Unchecked", "Checked"]
+    tab.mark_all_but_first()
+    assert [k.checkState(0).name for k in kids] == ["Unchecked", "Checked"]
+    assert not w._bg_timer.isActive()
+    w.set_reindex_minutes(15)
+    assert w._bg_timer.isActive() and w._bg_timer.interval() == 15 * 60_000 and w.settings.reindex_minutes == 15
+    w.set_reindex_minutes(0)
+    assert not w._bg_timer.isActive()
+    w.close()

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Callable
@@ -80,3 +81,26 @@ def trash_selected(groups: list[list[str]], selected: set[str]) -> tuple[list[st
                 errors.append((f, str(e)))
     forget(done)
     return done, errors
+
+
+KEEP_RULES = ("first", "oldest", "newest", "shortest")
+
+
+def choose_keep(files: list[str], rule: str = "first") -> str:
+    """Какую копию оставить. first — первая по алфавиту, oldest/newest — по дате изменения,
+    shortest — с самым коротким путём. При равенстве (или недоступном файле) выбирается первая по алфавиту."""
+    ordered = sorted(files)
+
+    def mtime(p: str) -> float:
+        try:
+            return os.stat(p).st_mtime
+        except OSError:
+            return float("inf")  # недоступный файл не выбираем как «оставить»
+
+    if rule == "oldest":
+        return min(ordered, key=mtime)
+    if rule == "newest":
+        return max(ordered, key=lambda p: (mtime(p) if mtime(p) != float("inf") else -1.0))
+    if rule == "shortest":
+        return min(ordered, key=len)
+    return ordered[0]

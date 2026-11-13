@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QComboBox, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ..i18n import tr
@@ -24,11 +24,18 @@ class DuplicatesTab(QWidget):
         self.btn_find.setObjectName("primary")
         self.btn_cancel = QPushButton(tr("Отменить"))
         self.btn_cancel.setEnabled(False)
-        self.btn_mark = QPushButton(tr("Отметить все копии, кроме первой"))
+        self.keep = QComboBox()
+        for key, label in (("first", tr("Первую в списке")), ("oldest", tr("Самую старую")), ("newest", tr("Самую новую")), ("shortest", tr("С самым коротким путём"))):
+            self.keep.addItem(label, key)
+        self.btn_mark = QPushButton(tr("Отметить остальные"))
         self.btn_unmark = QPushButton(tr("Снять отметки"))
         self.btn_trash = QPushButton(tr("Удалить отмеченные в корзину"))
-        for b in (self.btn_find, self.btn_cancel, self.btn_mark, self.btn_unmark):
+        for b in (self.btn_find, self.btn_cancel):
             row.addWidget(b)
+        row.addWidget(QLabel(tr("Оставить:")))
+        row.addWidget(self.keep)
+        row.addWidget(self.btn_mark)
+        row.addWidget(self.btn_unmark)
         row.addStretch(1)
         row.addWidget(self.btn_trash)
         lay.addLayout(row)
@@ -43,7 +50,7 @@ class DuplicatesTab(QWidget):
         lay.addWidget(self.info)
         self.btn_find.clicked.connect(self.start)
         self.btn_cancel.clicked.connect(lambda: self._task and self._task.cancel())
-        self.btn_mark.clicked.connect(self.mark_all_but_first)
+        self.btn_mark.clicked.connect(lambda: self.mark_duplicates(self.keep.currentData()))
         self.btn_unmark.clicked.connect(lambda: self._set_all(Qt.CheckState.Unchecked))
         self.btn_trash.clicked.connect(self.trash_checked)
 
@@ -100,10 +107,15 @@ class DuplicatesTab(QWidget):
             for k in kids:
                 k.setCheckState(0, state)
 
-    def mark_all_but_first(self) -> None:
+    def mark_duplicates(self, rule: str = "first") -> None:
+        """Отмечает в каждой группе все копии, кроме одной (по правилу «оставить»)."""
         for kids in self._children():
-            for j, k in enumerate(kids):
-                k.setCheckState(0, Qt.CheckState.Unchecked if j == 0 else Qt.CheckState.Checked)
+            keep = duplicates.choose_keep([k.text(0) for k in kids], rule)
+            for k in kids:
+                k.setCheckState(0, Qt.CheckState.Unchecked if k.text(0) == keep else Qt.CheckState.Checked)
+
+    def mark_all_but_first(self) -> None:
+        self.mark_duplicates("first")
 
     def trash_checked(self) -> None:
         groups, selected = [], set()
