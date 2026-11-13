@@ -169,4 +169,6 @@ EN = {
     "У вас последняя версия ({0}).": "You have the latest version ({0}).",
     "Доступна версия {0}.": "Version {0} is available.",
     "Не удалось проверить обновления: {0}": "Could not check for updates: {0}",
+    "Прочее": "Other",
+    "Нет данных для диаграммы": "No data for the chart",
 }

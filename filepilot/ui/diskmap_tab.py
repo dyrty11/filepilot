@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from ..i18n import tr
 from .. import diskmap
 from ..config import format_time, human_size
+from .charts import DonutChart
 from .theme import ACCENT, reveal_in_folder
 
 
@@ -29,7 +30,7 @@ class BarDelegate(QStyledItemDelegate):
 
 def _loc(name: str) -> str:
     """Служебные подписи из diskmap.py показываем на выбранном языке."""
-    return name.replace(tr("(файлы в корне)"), tr(tr("(файлы в корне)"))).replace(tr("(без расширения)"), tr(tr("(без расширения)")))
+    return name.replace(diskmap.ROOT_LABEL, tr(diskmap.ROOT_LABEL)).replace(diskmap.NO_EXT_LABEL, tr(diskmap.NO_EXT_LABEL))
 
 
 class DiskMapTab(QWidget):
@@ -54,7 +55,11 @@ class DiskMapTab(QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.setItemDelegateForColumn(1, BarDelegate(self.table))
         self.table.doubleClicked.connect(self._reveal)
-        lay.addWidget(self.table, 1)
+        self.chart = DonutChart()
+        body = QHBoxLayout()
+        body.addWidget(self.table, 1)
+        body.addWidget(self.chart)
+        lay.addLayout(body, 1)
         self.info = QLabel("")
         lay.addWidget(self.info)
         self.modes["files"].setChecked(True)
@@ -84,15 +89,23 @@ class DiskMapTab(QWidget):
             data = diskmap.top_files(200)
             top = data[0]["size"] if data else 1
             self._fill([tr("Файл"), tr("Размер"), tr("Изменён")], [[(d["path"], None), (human_size(d["size"]), d["size"] / (top or 1)), (format_time(d["mtime"]), None)] for d in data])
+            self.chart.setVisible(False)
             self.info.setText(tr('Показано файлов: {0} (самые крупные). Двойной щелчок покажет файл в папке.').format(len(data)))
         elif self.modes["folders"].isChecked():
             data = diskmap.by_folder(self.settings.folders)
             self._fill([tr("Папка"), tr("Размер"), tr("Файлов"), tr("Доля")], [[(_loc(d["folder"]), None), (human_size(d["size"]), d["share"]), (str(d["files"]), None), (f"{d['share'] * 100:.1f}%", None)] for d in data])
+            self._chart([(_loc(d["folder"]), d["size"]) for d in data])
             self.info.setText(tr("Размер по папкам первого уровня внутри добавленных папок.") if data else tr("Добавьте папки и проиндексируйте их."))
         else:
             data = diskmap.by_type()
             self._fill([tr("Тип"), tr("Размер"), tr("Файлов"), tr("Доля")], [[(_loc(d["ext"]), None), (human_size(d["size"]), d["share"]), (str(d["files"]), None), (f"{d['share'] * 100:.1f}%", None)] for d in data])
+            self._chart([(_loc(d["ext"]), d["size"]) for d in data])
             self.info.setText(tr("Какие типы файлов занимают больше всего места."))
+
+    def _chart(self, items) -> None:
+        top, other = diskmap.group_top(items, 7)
+        self.chart.set_data(top, other)
+        self.chart.setVisible(True)
 
     def _reveal(self, *_):
         if not self.modes["files"].isChecked():

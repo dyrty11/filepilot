@@ -1,6 +1,7 @@
 """Извлечение текста из файлов. Docx/xlsx/pptx/odt читаются напрямую из zip: без сторонних библиотек."""
 from __future__ import annotations
 
+import logging
 import re
 import zipfile
 from pathlib import Path
@@ -62,6 +63,7 @@ def read_text_file(path: Path) -> str:
 
 def _read_pdf(path: Path) -> str:
     from pypdf import PdfReader
+    logging.getLogger("pypdf").setLevel(logging.CRITICAL)  # битые PDF не сыплют предупреждениями
 
     reader = PdfReader(str(path))
     if reader.is_encrypted:

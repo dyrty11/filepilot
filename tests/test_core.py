@@ -204,3 +204,9 @@ def test_saved_searches_roundtrip():
     assert [e["query"] for e in s2.saved_searches] == ["y", "z"]
     s2.delete_search("а")
     assert [e["name"] for e in s2.saved_searches] == ["б"]
+
+
+def test_group_top():
+    top, other = diskmap.group_top([("a", 50), ("b", 30), ("c", 10), ("d", 6), ("e", 4), ("z", 0)], top=3)
+    assert top == [("a", 50), ("b", 30), ("c", 10)] and other == 10
+    assert diskmap.group_top([], 3) == ([], 0)

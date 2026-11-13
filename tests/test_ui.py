@@ -82,3 +82,23 @@ def test_update_flow_in_window(app, monkeypatch):
     assert wait_until(lambda: w._update_task is None)
     assert "последняя" in w.status.text()
     w.close()
+
+
+def test_donut_chart_geometry_and_english_labels(app, tmp_path):
+    from PySide6.QtCore import QPointF
+    from filepilot import i18n
+    from filepilot.ui.charts import DonutChart
+    from filepilot.ui.diskmap_tab import _loc
+    ch = DonutChart()
+    ch.resize(300, 500)
+    ch.set_data([("a", 75), ("b", 25)], 0)
+    c = ch._ring().center()
+    r = ch._ring().width() / 2 * 0.75
+    assert ch.slice_at(QPointF(c.x() + r * 0.5, c.y() - r * 0.5)) == 0   # сверху справа — первый сектор (75 %)
+    assert ch.slice_at(QPointF(c.x() - r * 0.5, c.y() - r * 0.5)) == 1   # сверху слева — последний
+    assert ch.slice_at(QPointF(c.x(), c.y())) is None                    # дырка в центре
+    ch.grab()  # рисование не падает
+    ch.set_data([], 0)
+    ch.grab()
+    i18n.set_language("en")
+    assert _loc("(без расширения)") == "(no extension)"
