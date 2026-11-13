@@ -19,7 +19,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
-VersionInfoVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppVersion}.0
 VersionInfoProductName={#MyAppName}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
@@ -74,7 +74,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 ; Обычная установка: галочка «Запустить» на последней странице
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 ; Обновление из программы (тихий режим с /RELAUNCH=1): сразу открыть новую версию
-Filename: "{app}\{#MyAppExeName}"; Flags: nowait runasoriginaluser; Check: IsRelaunch
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall runasoriginaluser; Check: IsRelaunch
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"

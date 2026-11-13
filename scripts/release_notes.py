@@ -13,6 +13,7 @@ def section(version: str, text: str) -> str:
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")  # на Windows при перенаправлении вывода кодировка была бы cp1252 и русский текст ломал бы скрипт
     ver = sys.argv[1].lstrip("v")
     log = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
     body = section(ver, log.read_text(encoding="utf-8")) if log.exists() else ""
