@@ -43,6 +43,8 @@ jobs:
           $ver = "$env:GITHUB_REF_NAME".TrimStart('v')
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$ver" installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Постоянное имя для ссылки «Скачать»: releases/latest/download/FilePilotSetup.exe
+          Copy-Item "dist\installer\FilePilotSetup-$ver.exe" dist\installer\FilePilotSetup.exe
       - name: Контрольные суммы
         shell: pwsh
         run: |

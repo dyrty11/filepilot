@@ -8,6 +8,11 @@ from pathlib import Path
 
 APP_NAME = "FilePilot"
 
+# Адреса проекта: страница со скачиванием на сайте, исходный код, постоянная ссылка на установщик
+SITE_URL = "https://dyrty11.github.io/project-filepilot.html"
+REPO_URL = "https://github.com/dyrty11/filepilot"
+DOWNLOAD_URL = REPO_URL + "/releases/latest/download/FilePilotSetup.exe"
+
 # Папки, в которые индексатор не заходит
 IGNORED_DIRS = {
     ".git", ".hg", ".svn",

@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__, changelog, db, indexer, updater
-from ..config import settings_path
+from ..config import DOWNLOAD_URL, REPO_URL, SITE_URL, settings_path
 from ..i18n import tr
 from ..settings import load_settings, save_settings
 from .diskmap_tab import DiskMapTab
@@ -97,6 +97,8 @@ class MainWindow(QMainWindow):
         upd_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         upd_menu = QMenu(upd_btn)
         upd_menu.addAction(tr("Проверить обновления"), lambda: self.check_updates(manual=True))
+        upd_menu.addAction(tr("О программе…"), self.show_about)
+        upd_menu.addSeparator()
         self.act_auto_update = upd_menu.addAction(tr("Проверять при запуске"))
         self.act_auto_update.setCheckable(True)
         self.act_auto_update.setChecked(self.settings.check_updates)
@@ -125,6 +127,14 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(1200, self.check_whats_new)
         if self.settings.check_updates and updater.due(self.settings.last_update_check) and not os.environ.get("FILEPILOT_NO_UPDATE_CHECK"):
             QTimer.singleShot(2500, lambda: self.check_updates(manual=False))
+
+    def show_about(self) -> None:
+        QMessageBox.about(self, tr("О программе"), (
+            "<h3>FilePilot {0}</h3><p>{1}</p>"
+            "<p>{2} <a href=\"{3}\">{3}</a><br>{4} <a href=\"{5}\">{5}</a><br>{6} <a href=\"{7}\">{7}</a></p>"
+            "<p>{8}</p>").format(
+            __version__, tr("Поиск по содержимому файлов, дубликаты, карта диска и правила автосортировки. Всё работает на вашем компьютере."),
+            tr("Сайт и скачивание:"), SITE_URL, tr("Установщик:"), DOWNLOAD_URL, tr("Исходный код:"), REPO_URL, tr("Лицензия MIT.")))
 
     def check_whats_new(self) -> bool:
         """После обновления (установщик, скачанный заново, или автообновление) показывает уведомление и «Что нового».

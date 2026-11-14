@@ -156,3 +156,14 @@ def test_whats_new_after_update(app, monkeypatch):
     w = MainWindow()
     assert w.check_whats_new() is False and not shown
     w.close()
+
+
+def test_about_dialog_has_links(app, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from filepilot import config
+    shown = []
+    monkeypatch.setattr(QMessageBox, "about", staticmethod(lambda parent, title, text: shown.append(text)))
+    w = MainWindow()
+    w.show_about()
+    assert config.SITE_URL in shown[0] and config.REPO_URL in shown[0] and config.DOWNLOAD_URL in shown[0]
+    w.close()

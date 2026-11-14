@@ -2,7 +2,7 @@
 ; Версию можно передать снаружи: ISCC /DMyAppVersion=0.3.0 installer.iss (так делает release.yml).
 ; Файл сохранён в UTF-8 с BOM: без него Inno Setup не прочитает русские строки.
 #ifndef MyAppVersion
-  #define MyAppVersion "0.4.1"
+  #define MyAppVersion "0.4.2"
 #endif
 #define MyAppName "FilePilot"
 #define MyAppPublisher "dyrty11"

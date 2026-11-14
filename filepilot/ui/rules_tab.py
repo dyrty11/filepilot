@@ -26,8 +26,10 @@ class PreviewDialog(QDialog):
         t.setHorizontalHeaderLabels([tr("Правило"), tr("Файл"), tr("Результат"), tr("Размер")])
         t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         t.verticalHeader().setVisible(False)
+        t.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         t.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         t.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        t.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         for r, a in enumerate(actions):
             result = a.get("error") and tr('Ошибка: {0}').format(a['error']) or a.get("dest") or tr(rules_mod.ACTION_LABELS.get(a["action"], a["action"]))
             for c, text in enumerate((a.get("rule", ""), a["file"], result, human_size(a.get("size")))):

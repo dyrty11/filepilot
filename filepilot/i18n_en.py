@@ -185,4 +185,11 @@ EN = {
     "FilePilot обновлён": "FilePilot updated",
     "Установлена версия {0}.": "Version {0} is installed.",
     "Была: {0}.": "Was: {0}.",
+    "О программе…": "About…",
+    "О программе": "About",
+    "Поиск по содержимому файлов, дубликаты, карта диска и правила автосортировки. Всё работает на вашем компьютере.": "Content search, duplicates, disk map and auto-sorting rules. Everything runs on your computer.",
+    "Сайт и скачивание:": "Website and download:",
+    "Установщик:": "Installer:",
+    "Исходный код:": "Source code:",
+    "Лицензия MIT.": "MIT license.",
 }

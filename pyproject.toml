@@ -1,6 +1,6 @@
 [project]
 name = "filepilot"
-version = "0.4.1"
+version = "0.4.2"
 description = "Локальный поиск по содержимому файлов, дубликаты, карта диска и правила сортировки"
 requires-python = ">=3.10"
 dependencies = ["PySide6-Essentials>=6.5", "pypdf>=3.17", "send2trash>=1.8"]
