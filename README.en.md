@@ -15,7 +15,7 @@ Everything runs on your computer and the index is stored locally. Open source, M
 - **Duplicates**: compared by content. Choose which copy to keep (oldest, newest, shortest path). Files only go to the Recycle Bin, and at least one copy always stays in every group.
 - **Disk map**: largest files, folders and file types, with a donut chart.
 - **Auto-sorting rules**: move, archive to zip or send to the Recycle Bin by folder, extension, name pattern and file age. "Dry run" shows the result before you apply it. There is no permanent delete.
-- **Index**: auto-index on start, background refresh on a timer (15 minutes, hour, 6 hours), cancel, clear.
+- **Index**: auto-index on start, background refresh on a timer (15 minutes, hour, 6 hours), exclusions (folders and name masks), cancel, clear.
 - **Russian and English UI**: chosen from the system language or with the "Language / Язык" button.
 - **Updates**: a check once a day, one-click install, and a "What's new" window after updating.
 - **Privacy**: your files, index and paths are never sent anywhere. The only network request is the update check on GitHub (can be turned off).
@@ -60,6 +60,8 @@ python -m filepilot
 python -m filepilot folders add "C:\Users\You\Documents"
 python -m filepilot index
 python -m filepilot search "contract 2024" --ext pdf,docx --older 30
+python -m filepilot search "contract" --folder "C:\Users\You\Documents\Work"
+python -m filepilot exclude add node_modules "*.tmp"
 python -m filepilot dupes
 python -m filepilot top
 python -m filepilot rules run            # dry run

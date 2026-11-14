@@ -1,6 +1,7 @@
 """Индексация папок: быстрый обход, пакетная запись, отмена, удаление исчезнувших файлов."""
 from __future__ import annotations
 
+import fnmatch
 import os
 import time
 from pathlib import Path
@@ -14,11 +15,33 @@ ProgressCb = Callable[[int, int, str], None]
 CancelCb = Callable[[], bool]
 
 
-def walk_files(root: Path) -> Iterable[Path]:
+def _is_path_pattern(pattern: str) -> bool:
+    return "/" in pattern or "\\" in pattern or ":" in pattern
+
+
+def is_excluded(path: str, name: str, patterns: Iterable[str]) -> bool:
+    """Исключение: либо путь папки/файла (всё внутри пропускается), либо маска имени без путей (node_modules, *.tmp, ~$*)."""
+    full = os.path.normcase(os.path.normpath(path))
+    low = name.lower()
+    for pat in patterns:
+        if _is_path_pattern(pat):
+            base = os.path.normcase(os.path.normpath(pat))
+            if full == base or full.startswith(base.rstrip("\\/") + os.sep):
+                return True
+        elif fnmatch.fnmatchcase(low, pat.lower()):
+            return True
+    return False
+
+
+def walk_files(root: Path, exclude: Iterable[str] = ()) -> Iterable[Path]:
+    exclude = [e for e in exclude if e]
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False, onerror=lambda e: None):
-        dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS and not d.startswith(".")]
+        dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS and not d.startswith(".")
+                       and not (exclude and is_excluded(os.path.join(dirpath, d), d, exclude))]
         for name in filenames:
             p = Path(dirpath) / name
+            if exclude and is_excluded(str(p), name, exclude):
+                continue
             if not p.is_symlink():
                 yield p
 
@@ -32,13 +55,14 @@ def index_folders(
     on_progress: ProgressCb | None = None,
     should_cancel: CancelCb | None = None,
     batch: int = 200,
+    exclude: Iterable[str] = (),
 ) -> dict:
     """Индексирует папки. Возвращает статистику; при отмене ставит cancelled=True и ничего не удаляет."""
     conn = get_db()
     roots = [str(Path(f).expanduser()) for f in folders if Path(f).expanduser().is_dir()]
     files: list[Path] = []
     for r in roots:
-        files.extend(walk_files(Path(r)))
+        files.extend(walk_files(Path(r), exclude))
 
     known = {row["path"]: (row["size"] or 0, row["mtime"] or 0.0) for row in conn.execute("SELECT path, size, mtime FROM files")}
     total = len(files)

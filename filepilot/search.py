@@ -1,6 +1,7 @@
 """Поиск по содержимому (FTS5) с фильтрами. Подсветка помечается служебными символами, а не HTML."""
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 import time
@@ -18,9 +19,10 @@ class Filters:
     min_kb: int | None = None
     max_kb: int | None = None
     older_days: int | None = None
+    folder: str | None = None  # искать только внутри этой папки (с подпапками)
 
     def active(self) -> bool:
-        return bool(self.exts or self.min_kb or self.max_kb or self.older_days)
+        return bool(self.exts or self.min_kb or self.max_kb or self.older_days or self.folder)
 
 
 def parse_exts(text: str) -> list[str]:
@@ -66,6 +68,11 @@ def _where(f: Filters, params: list) -> str:
     if f.older_days:
         cond.append("f.mtime <= ?")
         params.append(time.time() - f.older_days * 86400)
+    if f.folder:
+        base = os.path.normpath(f.folder).rstrip("\\/")
+        esc = base.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        cond.append("f.path LIKE ? ESCAPE '\\'")
+        params.append(esc + os.sep.replace("\\", "\\\\") + "%")
     return (" AND " + " AND ".join(cond)) if cond else ""
 
 

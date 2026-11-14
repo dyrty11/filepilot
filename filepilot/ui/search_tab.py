@@ -96,7 +96,10 @@ class SearchTab(QWidget):
         self.min_kb = self._spin("—")
         self.max_kb = self._spin("—")
         self.older = self._spin("—")
-        for text, w in ((tr("Расширения:"), self.ext), (tr("Мин. КБ:"), self.min_kb), (tr("Макс. КБ:"), self.max_kb), (tr("Старше (дн.):"), self.older)):
+        self.scope = QComboBox()
+        self.scope.setMinimumWidth(170)
+        self.scope.setMaximumWidth(260)
+        for text, w in ((tr("Папка:"), self.scope), (tr("Расширения:"), self.ext), (tr("Мин. КБ:"), self.min_kb), (tr("Макс. КБ:"), self.max_kb), (tr("Старше (дн.):"), self.older)):
             fl.addWidget(QLabel(text))
             fl.addWidget(w)
         fl.addStretch(1)
@@ -139,6 +142,7 @@ class SearchTab(QWidget):
         for w in (self.min_kb, self.max_kb, self.older):
             w.valueChanged.connect(lambda _: self._timer.start())
         self.filters_box.toggled.connect(self._on_filters_toggled)
+        self.scope.currentIndexChanged.connect(lambda _: self._timer.start())
         self.table.doubleClicked.connect(lambda *_: self.open_selected())
         self.table.customContextMenuRequested.connect(self._menu)
         self.table.itemSelectionChanged.connect(self.update_preview)
@@ -147,6 +151,20 @@ class SearchTab(QWidget):
         self.btn_csv.clicked.connect(self.export_results)
         self.saved.activated.connect(self.load_saved)
         self.refresh_saved()
+        self.refresh_folders()
+
+    def refresh_folders(self, select: str | None = None) -> None:
+        """Список папок для фильтра «Папка»; выбор сохраняется, если папка осталась в списке."""
+        keep = select if select is not None else self.scope.currentData()
+        self.scope.blockSignals(True)
+        self.scope.clear()
+        self.scope.addItem(tr("Все папки"), None)
+        for f in self.settings.folders:
+            self.scope.addItem(f, f)
+        i = self.scope.findData(keep) if keep else 0
+        self.scope.setCurrentIndex(max(i, 0))
+        self.scope.blockSignals(False)
+        self._timer.start()
 
     @staticmethod
     def _spin(special: str) -> QSpinBox:
@@ -164,7 +182,8 @@ class SearchTab(QWidget):
         if not self.filters_box.isChecked():
             return Filters()
         return Filters(exts=parse_exts(self.ext.text()), min_kb=self.min_kb.value() or None,
-                       max_kb=self.max_kb.value() or None, older_days=self.older.value() or None)
+                       max_kb=self.max_kb.value() or None, older_days=self.older.value() or None,
+                       folder=self.scope.currentData())
 
     def run_search(self) -> None:
         self._timer.stop()
@@ -246,7 +265,7 @@ class SearchTab(QWidget):
             return
         self.settings.save_search({"name": name, "query": q, "exts": self.ext.text(), "min_kb": self.min_kb.value(),
                                    "max_kb": self.max_kb.value(), "older": self.older.value(),
-                                   "filters": self.filters_box.isChecked()})
+                                   "filters": self.filters_box.isChecked(), "folder": self.scope.currentData() or ""})
         save_settings(self.settings)
         self.refresh_saved(name)
 
@@ -259,6 +278,7 @@ class SearchTab(QWidget):
         self.min_kb.setValue(int(entry.get("min_kb", 0) or 0))
         self.max_kb.setValue(int(entry.get("max_kb", 0) or 0))
         self.older.setValue(int(entry.get("older", 0) or 0))
+        self.refresh_folders(str(entry.get("folder") or "") or None)
         self.filters_box.setChecked(bool(entry.get("filters", False)))
         self.query.setText(str(entry.get("query", "")))
         self.run_search()

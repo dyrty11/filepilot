@@ -18,6 +18,20 @@ def _out(obj, as_json: bool, lines) -> None:
             print(line)
 
 
+def _cmd_exclude(a) -> int:
+    s = load_settings()
+    if a.action == "add":
+        for p in a.patterns:
+            s.add_exclude(p)
+        save_settings(s)
+    elif a.action == "remove":
+        for p in a.patterns:
+            s.remove_exclude(p)
+        save_settings(s)
+    _out(s.exclude, a.json, s.exclude or ["(исключений нет)"])
+    return 0
+
+
 def _cmd_folders(a) -> int:
     s = load_settings()
     if a.action == "add":
@@ -37,7 +51,7 @@ def _cmd_index(a) -> int:
     if not folders:
         print("Нет папок. Добавьте: filepilot folders add <путь>", file=sys.stderr)
         return 2
-    stats = indexer.index_folders(folders, on_progress=None if a.json else _progress)
+    stats = indexer.index_folders(folders, on_progress=None if a.json else _progress, exclude=load_settings().exclude)
     if not a.json:
         print()
     _out(stats, a.json, [f"Файлов: {stats['total']}, новых: {stats['added']}, обновлено: {stats['updated']}, "
@@ -51,7 +65,7 @@ def _progress(i: int, total: int, path: str) -> None:
 
 
 def _cmd_search(a) -> int:
-    f = search_mod.Filters(exts=search_mod.parse_exts(a.ext or ""), min_kb=a.min_kb, max_kb=a.max_kb, older_days=a.older)
+    f = search_mod.Filters(exts=search_mod.parse_exts(a.ext or ""), min_kb=a.min_kb, max_kb=a.max_kb, older_days=a.older, folder=a.folder)
     res = search_mod.search(a.query, f, limit=a.limit)
     for r in res:  # убираем служебные маркеры подсветки в консоли
         r["snippet"] = (r["snippet"] or "").replace(search_mod.HL_START, "[").replace(search_mod.HL_END, "]")
@@ -110,10 +124,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("folders", help="папки для индексации"); s.add_argument("action", choices=["list", "add", "remove"])
     s.add_argument("paths", nargs="*"); s.set_defaults(func=_cmd_folders)
+    s = sub.add_parser("exclude", help="исключения индексации (папка или маска имени)"); s.add_argument("action", choices=["list", "add", "remove"])
+    s.add_argument("patterns", nargs="*"); s.set_defaults(func=_cmd_exclude)
     s = sub.add_parser("index", help="проиндексировать папки"); s.add_argument("folders", nargs="*"); s.set_defaults(func=_cmd_index)
     s = sub.add_parser("search", help="поиск по содержимому"); s.add_argument("query")
     s.add_argument("--ext"); s.add_argument("--min-kb", type=int); s.add_argument("--max-kb", type=int)
-    s.add_argument("--older", type=int, help="старше N дней"); s.add_argument("--limit", type=int, default=50); s.set_defaults(func=_cmd_search)
+    s.add_argument("--older", type=int, help="старше N дней"); s.add_argument("--folder", help="искать только в этой папке"); s.add_argument("--limit", type=int, default=50); s.set_defaults(func=_cmd_search)
     s = sub.add_parser("dupes", help="найти дубликаты"); s.add_argument("--min-kb", type=int, default=0); s.set_defaults(func=_cmd_dupes)
     s = sub.add_parser("top", help="самые крупные файлы"); s.add_argument("--limit", type=int, default=30); s.set_defaults(func=_cmd_top)
     s = sub.add_parser("rules", help="правила сортировки"); s.add_argument("action", choices=["list", "run"])

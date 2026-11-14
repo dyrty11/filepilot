@@ -167,3 +167,26 @@ def test_about_dialog_has_links(app, monkeypatch):
     w.show_about()
     assert config.SITE_URL in shown[0] and config.REPO_URL in shown[0] and config.DOWNLOAD_URL in shown[0]
     w.close()
+
+
+def test_scope_combo_and_excluded_index(app, tmp_path):
+    a, b = tmp_path / "a", tmp_path / "b"
+    for d in (a, b):
+        d.mkdir()
+        (d / "f.txt").write_text("общий текст", encoding="utf-8")
+    skip = b / "skip"; skip.mkdir(); (skip / "s.txt").write_text("общий текст", encoding="utf-8")
+    s = load_settings(); s.add_folder(str(a)); s.add_folder(str(b)); s.add_exclude(str(skip)); save_settings(s)
+    w = MainWindow()
+    w.show()
+    w.start_index()
+    assert wait_until(lambda: w._task is None)
+    t = w.search_tab
+    t.query.setText("текст")
+    t.run_search()
+    assert t.table.rowCount() == 2  # s.txt исключён
+    assert t.scope.count() == 3 and t.scope.itemText(0) == "Все папки"
+    t.filters_box.setChecked(True)
+    t.scope.setCurrentIndex(t.scope.findData(str(a)))
+    t.run_search()
+    assert t.table.rowCount() == 1 and t.table.item(0, 0).text().startswith(str(a))
+    assert t.current_filters().folder == str(a)

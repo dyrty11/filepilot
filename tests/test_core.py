@@ -238,3 +238,54 @@ def test_reindex_setting_validated():
     d = json.loads(settings_path().read_text(encoding="utf-8")); d["reindex_minutes"] = 7
     settings_path().write_text(json.dumps(d), encoding="utf-8")
     assert load_settings().reindex_minutes == 0
+
+
+def test_exclusions_skip_folders_and_masks(tmp_path):
+    root = tmp_path / "root"
+    make_tree(root)
+    (root / "node_modules").mkdir()
+    (root / "node_modules" / "x.txt").write_text("hello lib", encoding="utf-8")
+    (root / "tmp.tmp").write_text("hello tmp", encoding="utf-8")
+    skip = str(root / "docs")
+    st = indexer.index_folders([str(root)], exclude=["node_modules", "*.TMP", skip])
+    names = sorted(r["name"] for r in db.get_db().execute("SELECT name FROM files"))
+    assert names == ["a.txt", "b.txt", "big.bin"]
+    assert st["total"] == 3
+
+
+def test_exclusion_removes_already_indexed_files(tmp_path):
+    root = tmp_path / "root"
+    make_tree(root)
+    indexer.index_folders([str(root)])
+    assert search.search("Договор")
+    indexer.index_folders([str(root)], exclude=[str(root / "docs")])
+    assert not search.search("Договор")
+
+
+def test_path_exclusion_does_not_match_sibling_prefix(tmp_path):
+    assert indexer.is_excluded(str(tmp_path / "docs" / "a.txt"), "a.txt", [str(tmp_path / "docs")])
+    assert not indexer.is_excluded(str(tmp_path / "docs2" / "a.txt"), "a.txt", [str(tmp_path / "docs")])
+
+
+def test_search_in_folder_filter(tmp_path):
+    root = tmp_path / "root"
+    make_tree(root)
+    (root / "docs_x").mkdir()
+    (root / "docs_x" / "z.txt").write_text("hello other", encoding="utf-8")
+    indexer.index_folders([str(root)])
+    in_docs = search.search("", search.Filters(folder=str(root / "docs")))
+    assert sorted(Path(r["path"]).name for r in in_docs) == ["dogovor.txt", "old.log"]
+    assert search.Filters(folder="x").active()
+    assert [Path(r["path"]).name for r in search.search("other", search.Filters(folder=str(root / "docs_x")))] == ["z.txt"]
+    assert search.search("other", search.Filters(folder=str(root / "docs"))) == []
+
+
+def test_settings_exclude_roundtrip_and_tolerant_load(tmp_path):
+    s = Settings()
+    assert s.add_exclude(" node_modules ") and not s.add_exclude("node_modules") and not s.add_exclude("  ")
+    save_settings(s)
+    assert load_settings().exclude == ["node_modules"]
+    assert s.remove_exclude("node_modules") and not s.remove_exclude("node_modules")
+    from filepilot.config import settings_path
+    settings_path().write_text('{"exclude": "oops"}', encoding="utf-8")
+    assert load_settings().exclude == []

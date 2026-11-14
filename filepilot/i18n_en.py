@@ -192,4 +192,11 @@ EN = {
     "Установщик:": "Installer:",
     "Исходный код:": "Source code:",
     "Лицензия MIT.": "MIT license.",
+    "Все папки": "All folders",
+    "Папка:": "Folder:",
+    "Папка…": "Folder…",
+    "Маска…": "Mask…",
+    "Исключения: папка целиком или маска имени (node_modules, *.tmp, ~$*). Применяются при следующей индексации.": "Exclusions: a whole folder or a name mask (node_modules, *.tmp, ~$*). Applied on the next indexing.",
+    "Исключить по маске": "Exclude by mask",
+    "Маска имени (например node_modules или *.tmp):": "Name mask (e.g. node_modules or *.tmp):",
 }

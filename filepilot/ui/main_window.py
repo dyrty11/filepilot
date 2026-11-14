@@ -255,11 +255,12 @@ class MainWindow(QMainWindow):
             self.start_index()
 
     def manage_folders(self) -> None:
-        before = list(self.settings.folders)
+        before = (list(self.settings.folders), list(self.settings.exclude))
         FoldersDialog(self.settings, self).exec()
-        if before != self.settings.folders:
+        if before != (self.settings.folders, self.settings.exclude):
             save_settings(self.settings)
             self.status.setText(self._summary())
+            self.search_tab.refresh_folders()
 
     def _toggle_auto(self) -> None:
         self.settings.auto_index = self.act_auto.isChecked()
@@ -272,11 +273,12 @@ class MainWindow(QMainWindow):
             self.status.setText(tr("Сначала добавьте папку."))
             return
         folders = list(self.settings.folders)
+        exclude = list(self.settings.exclude)
         self._busy(True)
         self.status.setText(tr("Индексация…"))
 
         def job(progress, cancel):
-            return indexer.index_folders(folders, on_progress=progress, should_cancel=cancel)
+            return indexer.index_folders(folders, on_progress=progress, should_cancel=cancel, exclude=exclude)
 
         self._task = Task(job, self)
         self._task.progress.connect(self._on_progress)
