@@ -22,6 +22,21 @@ IGNORED_DIRS = {
     ".cache", ".gradle", ".idea", ".vscode",
 }
 
+# Системные папки в корне диска: при индексации целого диска (C:\) их пропускаем.
+# Применяется только к прямым потомкам корня диска, поэтому D:\Docs\Windows не пострадает.
+DRIVE_ROOT_SKIP = {
+    "windows", "program files", "program files (x86)", "programdata", "$recycle.bin",
+    "system volume information", "recovery", "$windows.~bt", "$windows.~ws", "windows.old",
+    "perflogs", "msocache", "config.msi", "documents and settings", "$sysreset", "$winreagent",
+    "proc", "sys", "dev", "run",  # корень файловой системы Linux
+}
+# Шумные папки на любой глубине (кэши приложений): документов там нет
+NOISY_DIRS = {"appdata"}
+
+# Атрибуты Windows: файл-заглушка облака (OneDrive и др.), чтение запустит скачивание
+ATTR_REPARSE = 0x400
+ATTR_OFFLINE_MASK = 0x1000 | 0x40000 | 0x400000
+
 # Расширения, из которых достаём текст
 TEXT_EXTS = {
     ".txt", ".md", ".markdown", ".rst", ".log", ".csv", ".tsv",

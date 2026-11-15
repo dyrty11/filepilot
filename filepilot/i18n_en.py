@@ -202,4 +202,7 @@ EN = {
     'Операторы в строке поиска:\next:pdf,docx — типы файлов\nin:"C:\\Папка" — только в этой папке\nolder:30 — старше 30 дней\nbigger:5mb, smaller:100kb — размер\nAND, OR, NOT и "точная фраза" тоже работают': 'Operators in the search box:\next:pdf,docx — file types\nin:"C:\\Folder" — only inside this folder\nolder:30 — older than 30 days\nbigger:5mb, smaller:100kb — size\nAND, OR, NOT and "exact phrase" work too',
     "Группа": "Group",
     "Копий": "Copies",
+    "Индексация: {0} файлов, {1}": "Indexing: {0} files, {1}",
+    "Весь диск": "Whole drive",
+    "Вы добавляете диск целиком. Первая индексация может занять десятки минут, индекс вырастет. Папки Windows, Program Files, ProgramData и AppData будут пропущены. Для начала обычно хватает «Документов» и рабочих папок. Добавить диск?": "You are adding a whole drive. The first indexing can take tens of minutes and the index will grow. The Windows, Program Files, ProgramData and AppData folders are skipped. Your Documents and work folders are usually enough to start with. Add the drive?",
 }

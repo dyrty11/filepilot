@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import sys
 import time
 
@@ -256,12 +257,25 @@ class MainWindow(QMainWindow):
 
     def add_folders(self, paths: list[str]) -> int:
         """Добавляет папки в индекс (дубликаты и не-папки пропускаются) и запускает индексацию. Возвращает число добавленных."""
-        added = [p for p in paths if os.path.isdir(p) and self.settings.add_folder(p)]
+        paths = [p for p in paths if os.path.isdir(p)]
+        if any(Path(p).parent == Path(p) for p in paths) and not self._confirm_whole_drive():
+            paths = [p for p in paths if Path(p).parent != Path(p)]
+        added = [p for p in paths if self.settings.add_folder(p)]
         if added:
             save_settings(self.settings)
             self.search_tab.refresh_folders()
             self.start_index()
         return len(added)
+
+    def _confirm_whole_drive(self) -> bool:
+        """Целый диск индексируется долго и разрастает индекс: спрашиваем, прежде чем начать."""
+        box = QMessageBox(QMessageBox.Question, tr("Весь диск"),
+                          tr("Вы добавляете диск целиком. Первая индексация может занять десятки минут, индекс вырастет. "
+                             "Папки Windows, Program Files, ProgramData и AppData будут пропущены. "
+                             "Для начала обычно хватает «Документов» и рабочих папок. Добавить диск?"),
+                          QMessageBox.Yes | QMessageBox.No, self)
+        box.setDefaultButton(QMessageBox.No)
+        return box.exec() == QMessageBox.Yes
 
     # перетаскивание папок из Проводника прямо в окно
     def dragEnterEvent(self, e) -> None:
@@ -297,6 +311,7 @@ class MainWindow(QMainWindow):
         self.status.setText(tr("Индексация…"))
 
         def job(progress, cancel):
+            indexer.lower_priority()
             return indexer.index_folders(folders, on_progress=progress, should_cancel=cancel, exclude=exclude)
 
         self._task = Task(job, self)
@@ -306,10 +321,13 @@ class MainWindow(QMainWindow):
         self._task.start()
 
     def _on_progress(self, i: int, total: int, path: str) -> None:
+        if total <= 0:  # первый проход: число файлов ещё неизвестно
+            self.bar.setRange(0, 0)
+            self.status.setText(tr('Индексация: {0} файлов, {1}').format(i, path))
+            return
         self.bar.setRange(0, max(total, 1))
         self.bar.setValue(i)
-        if i % 25 == 0:
-            self.status.setText(tr('Индексация {0}/{1}: {2}').format(i, total, path))
+        self.status.setText(tr('Индексация {0}/{1}: {2}').format(i, total, path))
 
     def _busy(self, on: bool) -> None:
         self.bar.setVisible(on)

@@ -3,6 +3,8 @@ import time
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from filepilot import db, diskmap, duplicates, indexer, rules, search
 from filepilot.extractors import decode_bytes, extract_text
 from filepilot.settings import Settings, load_settings, save_settings
@@ -345,3 +347,37 @@ def test_export_duplicates_csv(tmp_path):
     assert raw.startswith(b"\xef\xbb\xbf") and n == 2
     lines = raw.decode("utf-8-sig").splitlines()
     assert len(lines) == 3 and lines[1].split(";")[:3] == ["1", "2", "11"]
+
+
+def test_drive_root_skips_system_dirs(tmp_path, monkeypatch):
+    root = tmp_path / "C"
+    for d in ("Windows/System32", "Program Files/App", "Users/me/AppData/Local", "Users/me/Docs/Windows", "Work"):
+        (root / d).mkdir(parents=True)
+        (root / d / "f.txt").write_text("x", encoding="utf-8")
+    names = lambda: sorted(os.path.relpath(p, root).replace(os.sep, "/") for p, *_ in indexer.scan(str(root)))  # noqa: E731
+    assert len(names()) == 4  # обычная папка: пропущена только AppData
+    monkeypatch.setattr(indexer, "_is_drive_root", lambda p: True)
+    # корень диска: системные папки на первом уровне пропускаются, AppData везде, вложенная «Windows» остаётся
+    assert names() == ["Users/me/Docs/Windows/f.txt", "Work/f.txt"]
+
+
+def test_cloud_placeholder_is_not_read(tmp_path, monkeypatch):
+    f = tmp_path / "cloud.txt"
+    f.write_text("секретный текст", encoding="utf-8")
+    st = f.stat()
+    monkeypatch.setattr(indexer, "scan", lambda root, exclude=(): iter([(str(f), "cloud.txt", st.st_size, st.st_mtime, st.st_ctime, True)]))
+    monkeypatch.setattr(indexer, "extract_text", lambda p: pytest.fail("заглушку облака читать нельзя"))
+    indexer.index_folders([str(tmp_path)])
+    row = db.get_db().execute("SELECT content FROM files WHERE name='cloud.txt'").fetchone()
+    assert row["content"] is None
+
+
+def test_progress_is_throttled_and_total_unknown_first_time(tmp_path):
+    root = tmp_path / "root"
+    make_tree(root)
+    calls = []
+    indexer.index_folders([str(root)], on_progress=lambda i, n, p: calls.append((i, n)))
+    assert calls[0][1] == 0 and calls[-1] == (5, 5)  # первый проход: итог неизвестен, в конце точное число
+    calls.clear()
+    indexer.index_folders([str(root)], on_progress=lambda i, n, p: calls.append((i, n)))
+    assert calls[0][1] == 5  # повторный проход знает, сколько файлов ждать

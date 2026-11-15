@@ -60,8 +60,7 @@ def _cmd_index(a) -> int:
 
 
 def _progress(i: int, total: int, path: str) -> None:
-    if i % 50 == 0 or i == total:
-        print(f"\r{i}/{total}", end="", file=sys.stderr, flush=True)
+    print(f"\r{i}/{total}" if total else f"\r{i}", end="", file=sys.stderr, flush=True)
 
 
 def _cmd_search(a) -> int:

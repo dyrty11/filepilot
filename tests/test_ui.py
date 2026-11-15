@@ -241,3 +241,13 @@ def test_drop_folders_into_window(app, tmp_path):
     assert wait_until(lambda: w._task is None)
     assert w.add_folders([str(folder)]) == 0  # повтор не дублируется
     w.close()
+
+
+def test_adding_whole_drive_asks_first(app, monkeypatch):
+    w = MainWindow()
+    asked = []
+    monkeypatch.setattr(w, "_confirm_whole_drive", lambda: (asked.append(1), False)[1])
+    root = os.path.abspath(os.sep)
+    assert w.add_folders([root]) == 0 and asked == [1]
+    assert root not in w.settings.folders
+    w.close()
