@@ -64,6 +64,14 @@ def find_duplicates(min_size: int = 1, on_progress: ProgressCb | None = None,
     return result
 
 
+def export_csv(groups: list[dict], dest: str) -> int:
+    """Одна строка на файл: номер группы, число копий, размер в байтах, путь. Возвращает число строк."""
+    from .exporting import write_csv
+    from .i18n import tr
+    rows = [(i, len(g["files"]), g["size"], p) for i, g in enumerate(groups, 1) for p in g["files"]]
+    return write_csv([tr("Группа"), tr("Копий"), tr("Размер, байт"), tr("Путь")], rows, dest)
+
+
 def trash_selected(groups: list[list[str]], selected: set[str]) -> tuple[list[str], list[tuple[str, str]]]:
     """Отправляет выбранные файлы в корзину, но в каждой группе обязательно оставляет хотя бы один.
     Возвращает (удалённые, [(путь, ошибка)])."""

@@ -4,17 +4,17 @@ from __future__ import annotations
 import html
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, Qt, QTimer
+from PySide6.QtCore import QRectF, QStringListModel, Qt, QTimer
 from PySide6.QtGui import QAbstractTextDocumentLayout, QGuiApplication, QTextDocument
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QCheckBox, QComboBox, QFileDialog, QGroupBox, QInputDialog, QMessageBox, QSplitter, QTextBrowser, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu,
+    QAbstractItemView, QApplication, QCompleter, QCheckBox, QComboBox, QFileDialog, QGroupBox, QInputDialog, QMessageBox, QSplitter, QTextBrowser, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu,
     QPushButton, QSpinBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
 from ..i18n import tr
 from ..config import format_time, human_size
-from ..search import HL_END, HL_START, Filters, export_csv, get_content, mark_matches, parse_exts, search
+from ..search import HL_END, HL_START, Filters, export_csv, get_content, mark_matches, merge_filters, parse_exts, parse_operators, search
 from ..settings import save_settings
 from .theme import HIGHLIGHT, open_path, reveal_in_folder
 
@@ -66,6 +66,12 @@ class SearchTab(QWidget):
         self.query = QLineEdit()
         self.query.setPlaceholderText(tr('Поиск по содержимому, например "договор 2024" (кавычки: точная фраза)'))
         self.query.setClearButtonEnabled(True)
+        self.query.setToolTip(tr('Операторы в строке поиска:\next:pdf,docx — типы файлов\nin:"C:\\Папка" — только в этой папке\nolder:30 — старше 30 дней\nbigger:5mb, smaller:100kb — размер\nAND, OR, NOT и "точная фраза" тоже работают'))
+        self._history = QStringListModel(self.settings.history, self)
+        completer = QCompleter(self._history, self)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.query.setCompleter(completer)
         self.btn = QPushButton(tr("Найти"))
         self.btn.setObjectName("primary")
         row.addWidget(self.query, 1)
@@ -150,6 +156,8 @@ class SearchTab(QWidget):
         self.btn_del.clicked.connect(self.delete_saved)
         self.btn_csv.clicked.connect(self.export_results)
         self.saved.activated.connect(self.load_saved)
+        self.query.returnPressed.connect(self.remember_query)
+        self.btn.clicked.connect(self.remember_query)
         self.refresh_saved()
         self.refresh_folders()
 
@@ -185,6 +193,12 @@ class SearchTab(QWidget):
                        max_kb=self.max_kb.value() or None, older_days=self.older.value() or None,
                        folder=self.scope.currentData())
 
+    def remember_query(self) -> None:
+        """Запрос попадает в историю, только когда его отправили явно (Enter или «Найти»), а не при наборе."""
+        self.settings.add_history(self.query.text())
+        self._history.setStringList(self.settings.history)
+        save_settings(self.settings)
+
     def run_search(self) -> None:
         self._timer.stop()
         res = search(self.query.text(), self.current_filters())
@@ -200,7 +214,8 @@ class SearchTab(QWidget):
             snip.setData(Qt.ItemDataRole.UserRole, item["snippet"] or "")
             for c, it in enumerate((path_item, size_item, QTableWidgetItem(format_time(item["mtime"])), snip)):
                 self.table.setItem(r, c, it)
-        if not self.query.text().strip() and not self.current_filters().active():
+        text, ops = parse_operators(self.query.text())
+        if not text and not merge_filters(self.current_filters(), ops).active():
             self.info.setText(tr("Введите запрос или задайте фильтры."))
         else:
             self.info.setText(tr('Найдено: {0}').format(len(res)) + (tr(" (показаны первые 300)") if len(res) >= 300 else ""))

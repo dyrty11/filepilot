@@ -11,11 +11,11 @@ Everything runs on your computer and the index is stored locally. Open source, M
 
 ## Features
 
-- **Full-text search** (txt, code, pdf, docx, xlsx, pptx, odt and more): filters by extension, size and age, a preview of the found text with highlighting, saved searches, CSV export.
-- **Duplicates**: compared by content. Choose which copy to keep (oldest, newest, shortest path). Files only go to the Recycle Bin, and at least one copy always stays in every group.
-- **Disk map**: largest files, folders and file types, with a donut chart.
+- **Full-text search** (txt, code, pdf, docx, xlsx, pptx, odt and more): filters by extension, size and age, operators right in the query (`ext:pdf bigger:5mb`), query history, a preview of the found text with highlighting, saved searches, CSV export.
+- **Duplicates**: compared by content, list export to CSV. Choose which copy to keep (oldest, newest, shortest path). Files only go to the Recycle Bin, and at least one copy always stays in every group.
+- **Disk map**: largest files, folders and file types, with a donut chart and CSV export of the table.
 - **Auto-sorting rules**: move, archive to zip or send to the Recycle Bin by folder, extension, name pattern and file age. "Dry run" shows the result before you apply it. There is no permanent delete.
-- **Index**: auto-index on start, background refresh on a timer (15 minutes, hour, 6 hours), exclusions (folders and name masks), cancel, clear.
+- **Index**: add folders by dragging them into the window, auto-index on start, background refresh on a timer (15 minutes, hour, 6 hours), exclusions (folders and name masks), cancel, clear.
 - **Russian and English UI**: chosen from the system language or with the "Language / Язык" button.
 - **Updates**: a check once a day, one-click install, and a "What's new" window after updating.
 - **Privacy**: your files, index and paths are never sent anywhere. The only network request is the update check on GitHub (can be turned off).
@@ -41,11 +41,30 @@ Get-FileHash .\FilePilotSetup.exe -Algorithm SHA256
 
 Windows SmartScreen may show an "Unknown publisher" warning: the installer is not code-signed yet. Compare the checksum, then click "More info" → "Run anyway". The source is open and the EXE is built by GitHub Actions from this repository.
 
+## Quick start
+
+1. Drag a folder from Explorer into the app window (or "Folders" → "Add"). Indexing starts by itself.
+2. Type a word or phrase on the "Search" tab. Enter saves the query; the down arrow shows your history.
+3. Narrow the search right in the query box:
+
+| Operator | What it does | Example |
+|---|---|---|
+| `ext:` | extensions, comma-separated | `contract ext:pdf,docx` |
+| `in:` | search inside a folder | `in:"C:\Work" report` |
+| `older:` | files older than N days | `older:30` |
+| `bigger:` / `smaller:` | size (`kb`, `mb`, `gb`, megabytes by default) | `bigger:5mb` |
+
+Operators override the "Filters" panel. A quoted phrase is searched as is: `"ext:pdf"` finds that text.
+
 ## Updates
 
 Once a day (turn it off in the "Updates" menu → "Check on start") the app makes one request to GitHub and offers to install a new version if there is one. The installer is downloaded only from github.com, verified against the SHA-256 in `SHA256SUMS.txt` and run over the current version; your data is not touched. After updating, the app shows a notification and a "What's new" window. The portable version and running from source only open the release page.
 
-## Run from source
+## For developers
+
+Regular users do not need this: the installer above is enough. This part covers running from source, using the app from a terminal and building a release.
+
+### Run from source
 
 ```
 python -m venv .venv
@@ -54,12 +73,13 @@ pip install -r requirements.txt
 python -m filepilot
 ```
 
-## Command line
+### Command line
 
 ```
 python -m filepilot folders add "C:\Users\You\Documents"
 python -m filepilot index
 python -m filepilot search "contract 2024" --ext pdf,docx --older 30
+python -m filepilot search "contract ext:pdf bigger:1mb"   # operators work here too
 python -m filepilot search "contract" --folder "C:\Users\You\Documents\Work"
 python -m filepilot exclude add node_modules "*.tmp"
 python -m filepilot dupes
@@ -70,7 +90,7 @@ python -m filepilot rules run --apply    # apply
 
 Command-line messages are currently in Russian.
 
-## Build and tests
+### Build and tests
 
 `build.bat` installs dependencies, runs the tests, builds `dist\FilePilot` (PyInstaller), a portable zip and, if Inno Setup is installed, the installer. It prints the SHA-256 at the end. A GitHub release builds itself: a `v*` tag runs `.github/workflows/release.yml`. Screenshots for this README are made by `scripts/make_screenshots.py`.
 

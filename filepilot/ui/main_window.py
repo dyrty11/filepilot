@@ -31,6 +31,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("FilePilot")
         self.setWindowIcon(app_icon())
         self.resize(1100, 730)
+        self.setAcceptDrops(True)
         self._had_settings_file = settings_path().exists()  # нет файла = первая установка
         self.settings = load_settings()
         self._task: Task | None = None
@@ -250,9 +251,27 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QFileDialog
 
         d = QFileDialog.getExistingDirectory(self, tr("Выберите папку для индексации"))
-        if d and self.settings.add_folder(d):
+        if d:
+            self.add_folders([d])
+
+    def add_folders(self, paths: list[str]) -> int:
+        """Добавляет папки в индекс (дубликаты и не-папки пропускаются) и запускает индексацию. Возвращает число добавленных."""
+        added = [p for p in paths if os.path.isdir(p) and self.settings.add_folder(p)]
+        if added:
             save_settings(self.settings)
+            self.search_tab.refresh_folders()
             self.start_index()
+        return len(added)
+
+    # перетаскивание папок из Проводника прямо в окно
+    def dragEnterEvent(self, e) -> None:
+        urls = e.mimeData().urls() if e.mimeData().hasUrls() else []
+        if any(u.isLocalFile() and os.path.isdir(u.toLocalFile()) for u in urls):
+            e.acceptProposedAction()
+
+    def dropEvent(self, e) -> None:
+        self.add_folders([u.toLocalFile() for u in e.mimeData().urls() if u.isLocalFile()])
+        e.acceptProposedAction()
 
     def manage_folders(self) -> None:
         before = (list(self.settings.folders), list(self.settings.exclude))

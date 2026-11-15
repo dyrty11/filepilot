@@ -190,3 +190,54 @@ def test_scope_combo_and_excluded_index(app, tmp_path):
     t.run_search()
     assert t.table.rowCount() == 1 and t.table.item(0, 0).text().startswith(str(a))
     assert t.current_filters().folder == str(a)
+
+
+def test_operators_history_and_csv_export(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+    root = tmp_path / "docs"; root.mkdir()
+    (root / "a.txt").write_text("Договор поставки 2024", encoding="utf-8")
+    (root / "b.log").write_text("Договор старый", encoding="utf-8")
+    (root / "c.txt").write_text("копия", encoding="utf-8")
+    (root / "d.txt").write_text("копия", encoding="utf-8")
+    s = load_settings(); s.add_folder(str(root)); save_settings(s)
+    w = MainWindow(); w.show(); w.start_index()
+    assert wait_until(lambda: w._task is None)
+    st = w.search_tab
+    st.query.setText("договор ext:log")
+    st.run_search()
+    assert st.table.rowCount() == 1
+    st.remember_query()
+    st.remember_query()
+    assert load_settings().history == ["договор ext:log"]
+    # CSV дубликатов
+    w.dupes_tab.start()
+    assert wait_until(lambda: w.dupes_tab._task is None)
+    out = tmp_path / "d.csv"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(out), ""))
+    w.dupes_tab.export_groups()
+    assert len(out.read_text("utf-8-sig").splitlines()) == 3
+    # CSV карты диска
+    w.disk_tab.refresh()
+    out2 = tmp_path / "m.csv"
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(out2), ""))
+    w.disk_tab.export_table()
+    assert len(out2.read_text("utf-8-sig").splitlines()) == w.disk_tab.table.rowCount() + 1
+    w.close()
+
+
+def test_drop_folders_into_window(app, tmp_path):
+    from PySide6.QtCore import QMimeData, QUrl
+    from PySide6.QtGui import QDropEvent
+    from PySide6.QtCore import QPointF, Qt
+    folder = tmp_path / "new"; folder.mkdir()
+    (folder / "x.txt").write_text("привет мир", encoding="utf-8")
+    afile = tmp_path / "file.txt"; afile.write_text("не папка", encoding="utf-8")
+    w = MainWindow(); w.show()
+    assert w.add_folders([str(afile)]) == 0
+    md = QMimeData(); md.setUrls([QUrl.fromLocalFile(str(folder)), QUrl.fromLocalFile(str(afile))])
+    ev = QDropEvent(QPointF(5, 5), Qt.CopyAction, md, Qt.LeftButton, Qt.NoModifier)
+    w.dropEvent(ev)
+    assert str(folder) in w.settings.folders or os.path.normpath(str(folder)) in [os.path.normpath(f) for f in w.settings.folders]
+    assert wait_until(lambda: w._task is None)
+    assert w.add_folders([str(folder)]) == 0  # повтор не дублируется
+    w.close()

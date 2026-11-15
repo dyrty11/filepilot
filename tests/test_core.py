@@ -289,3 +289,59 @@ def test_settings_exclude_roundtrip_and_tolerant_load(tmp_path):
     from filepilot.config import settings_path
     settings_path().write_text('{"exclude": "oops"}', encoding="utf-8")
     assert load_settings().exclude == []
+
+
+def test_parse_operators():
+    text, ops = search.parse_operators('договор ext:PDF,docx older:30 bigger:5mb smaller:100kb in:"C:\\Мои документы"')
+    assert text == "договор"
+    assert ops.exts == [".pdf", ".docx"] and ops.older_days == 30
+    assert ops.min_kb == 5120 and ops.max_kb == 100 and ops.folder == "C:\\Мои документы"
+    # фраза в кавычках не считается оператором, размер без единицы — мегабайты
+    text, ops = search.parse_operators('"ext:pdf" bigger:2')
+    assert text == '"ext:pdf"' and ops.exts == [] and ops.min_kb == 2048
+    # некорректные значения игнорируются
+    assert search.parse_operators("older:abc bigger:много")[1].active() is False
+
+
+def test_search_with_operators(tmp_path):
+    root = tmp_path / "root"
+    make_tree(root)
+    indexer.index_folders([str(root)])
+    names = lambda q, f=None: sorted(Path(r["path"]).name for r in search.search(q, f))  # noqa: E731
+    assert names("hello ext:txt") == ["a.txt", "b.txt"]
+    assert names("hello ext:log") == []
+    assert names(f'in:"{root / "docs"}"') == ["dogovor.txt", "old.log"]
+    assert names("договор ext:txt in:" + str(root / "docs")) == ["dogovor.txt"]
+    assert names("ext:bin bigger:200kb") == ["big.bin"]
+    assert names("ext:bin bigger:1mb") == []
+    # оператор в строке сильнее панели фильтров
+    assert names("hello ext:txt", search.Filters(exts=[".log"])) == ["a.txt", "b.txt"]
+    # подсветка не цепляет слова операторов
+    assert search.query_words("договор ext:pdf") == ["договор"]
+
+
+def test_history_roundtrip_and_limit():
+    s = Settings()
+    for i in range(25):
+        s.add_history(f"запрос {i}")
+    s.add_history("  запрос 10  ")
+    s.add_history("")
+    assert s.history[0] == "запрос 10" and len(s.history) == 20 and s.history.count("запрос 10") == 1
+    save_settings(s)
+    assert load_settings().history == s.history
+    from filepilot.config import settings_path
+    settings_path().write_text('{"history": "oops"}', encoding="utf-8")
+    assert load_settings().history == []
+
+
+def test_export_duplicates_csv(tmp_path):
+    root = tmp_path / "root"
+    make_tree(root)
+    indexer.index_folders([str(root)])
+    groups = duplicates.find_duplicates()
+    dest = tmp_path / "dupes.csv"
+    n = duplicates.export_csv(groups, str(dest))
+    raw = dest.read_bytes()
+    assert raw.startswith(b"\xef\xbb\xbf") and n == 2
+    lines = raw.decode("utf-8-sig").splitlines()
+    assert len(lines) == 3 and lines[1].split(";")[:3] == ["1", "2", "11"]

@@ -20,6 +20,7 @@ class Settings:
     skipped_version: str = ""
     last_seen_version: str = ""  # версия, при последнем запуске которой показали «Что нового»
     saved_searches: list[dict] = field(default_factory=list)  # {name, query, exts, min_kb, max_kb, older, folder}
+    history: list[str] = field(default_factory=list)  # последние поисковые запросы, новые первыми
     exclude: list[str] = field(default_factory=list)  # исключения индексации: путь папки или маска имени (node_modules, *.tmp)
 
     def save_search(self, entry: dict) -> None:
@@ -27,6 +28,12 @@ class Settings:
 
     def delete_search(self, name: str) -> None:
         self.saved_searches = [e for e in self.saved_searches if e.get("name") != name]
+
+    def add_history(self, query: str, limit: int = 20) -> None:
+        query = " ".join((query or "").split())
+        if not query:
+            return
+        self.history = [query] + [h for h in self.history if h != query][: limit - 1]
 
     def add_exclude(self, pattern: str) -> bool:
         pattern = pattern.strip()
@@ -66,6 +73,7 @@ def load_settings() -> Settings:
         return Settings()
     folders = data.get("folders")
     exclude = data.get("exclude")
+    history = data.get("history")
     return Settings(
         folders=[str(f) for f in folders] if isinstance(folders, list) else [],
         auto_index=bool(data.get("auto_index", False)),
@@ -76,6 +84,7 @@ def load_settings() -> Settings:
         last_update_check=float(data.get("last_update_check") or 0) if isinstance(data.get("last_update_check"), (int, float)) else 0.0,
         skipped_version=str(data.get("skipped_version") or ""),
         last_seen_version=str(data.get("last_seen_version") or ""),
+        history=[str(x) for x in history if str(x).strip()][:20] if isinstance(history, list) else [],
         exclude=[str(x).strip() for x in exclude if str(x).strip()] if isinstance(exclude, list) else [],
         saved_searches=[e for e in (data.get("saved_searches") or []) if isinstance(e, dict) and e.get("name")],
     )

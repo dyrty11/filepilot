@@ -35,6 +35,53 @@ def parse_exts(text: str) -> list[str]:
     return out
 
 
+_OP_RX = re.compile(r'"[^"]*"|(?<!\S)(ext|in|older|bigger|smaller):(?:"([^"]*)"|(\S+))', re.IGNORECASE)
+_SIZE_RX = re.compile(r"^(\d+(?:[.,]\d+)?)\s*(kb|кб|mb|мб|gb|гб)?$", re.IGNORECASE)
+_UNIT_KB = {"kb": 1, "кб": 1, "mb": 1024, "мб": 1024, "gb": 1024 * 1024}
+
+
+def _size_kb(text: str) -> int | None:
+    """'5mb' -> 5120, '100kb' -> 100, '2' -> 2048 (без единицы считаем мегабайты)."""
+    m = _SIZE_RX.match(text.strip())
+    if not m:
+        return None
+    unit = (m.group(2) or "mb").lower()
+    return max(1, int(float(m.group(1).replace(",", ".")) * _UNIT_KB[unit]))
+
+
+def parse_operators(query: str) -> tuple[str, Filters]:
+    """Достаёт из строки поиска операторы: ext:pdf,docx  in:"C:\\Мои документы"  older:30  bigger:5mb  smaller:100kb.
+    Возвращает (текст без операторов, фильтры из операторов). Фразы в кавычках не трогаются."""
+    ops = Filters()
+
+    def take(m: re.Match) -> str:
+        key = m.group(1)
+        if not key:
+            return m.group(0)  # фраза в кавычках
+        val = (m.group(2) if m.group(2) is not None else m.group(3)).strip()
+        key = key.lower()
+        if key == "ext":
+            ops.exts = parse_exts(val)
+        elif key == "in":
+            ops.folder = val or None
+        elif key == "older":
+            ops.older_days = int(val) if val.isdigit() and int(val) > 0 else None
+        elif key == "bigger":
+            ops.min_kb = _size_kb(val)
+        elif key == "smaller":
+            ops.max_kb = _size_kb(val)
+        return " "
+
+    text = _OP_RX.sub(take, query or "")
+    return re.sub(r"\s+", " ", text).strip(), ops
+
+
+def merge_filters(base: Filters, ops: Filters) -> Filters:
+    """Оператор в строке поиска сильнее поля в панели фильтров."""
+    return Filters(exts=ops.exts or base.exts, min_kb=ops.min_kb or base.min_kb, max_kb=ops.max_kb or base.max_kb,
+                   older_days=ops.older_days or base.older_days, folder=ops.folder or base.folder)
+
+
 def build_fts_query(q: str) -> str:
     """Слова дополняются до префиксов: «догов» найдёт «договор». Кавычки означают точную фразу."""
     parts: list[str] = []
@@ -77,8 +124,8 @@ def _where(f: Filters, params: list) -> str:
 
 
 def search(query: str, filters: Filters | None = None, limit: int = 300) -> list[dict]:
-    f = filters or Filters()
-    q = (query or "").strip()
+    q, ops = parse_operators(query or "")
+    f = merge_filters(filters or Filters(), ops)
     conn = get_db()
     params: list = []
     if not q:
@@ -120,7 +167,7 @@ def get_content(path: str) -> str | None:
 
 def query_words(query: str) -> list[str]:
     words: list[str] = []
-    for tok in re.findall(r'"[^"]+"|\S+', query or ""):
+    for tok in re.findall(r'"[^"]+"|\S+', parse_operators(query or "")[0]):
         if tok in _OPS:
             continue
         words += [w for w in re.findall(r"\w+", tok) if w.upper() not in _OPS]

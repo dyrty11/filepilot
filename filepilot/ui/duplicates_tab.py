@@ -30,6 +30,7 @@ class DuplicatesTab(QWidget):
         self.btn_mark = QPushButton(tr("Отметить остальные"))
         self.btn_unmark = QPushButton(tr("Снять отметки"))
         self.btn_trash = QPushButton(tr("Удалить отмеченные в корзину"))
+        self.btn_csv = QPushButton(tr("Экспорт в CSV"))
         for b in (self.btn_find, self.btn_cancel):
             row.addWidget(b)
         row.addWidget(QLabel(tr("Оставить:")))
@@ -37,6 +38,7 @@ class DuplicatesTab(QWidget):
         row.addWidget(self.btn_mark)
         row.addWidget(self.btn_unmark)
         row.addStretch(1)
+        row.addWidget(self.btn_csv)
         row.addWidget(self.btn_trash)
         lay.addLayout(row)
         self.bar = QProgressBar()
@@ -53,6 +55,17 @@ class DuplicatesTab(QWidget):
         self.btn_mark.clicked.connect(lambda: self.mark_duplicates(self.keep.currentData()))
         self.btn_unmark.clicked.connect(lambda: self._set_all(Qt.CheckState.Unchecked))
         self.btn_trash.clicked.connect(self.trash_checked)
+        self.btn_csv.clicked.connect(self.export_groups)
+
+    def export_groups(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+        if not self.groups:
+            self.info.setText(tr("Нет результатов для экспорта."))
+            return
+        dest, _ = QFileDialog.getSaveFileName(self, tr("Экспорт результатов"), "filepilot-duplicates.csv", "CSV (*.csv)")
+        if dest:
+            n = duplicates.export_csv(self.groups, dest)
+            self.info.setText(tr('Сохранено строк: {0} → {1}').format(n, dest))
 
     def start(self) -> None:
         if self._task:

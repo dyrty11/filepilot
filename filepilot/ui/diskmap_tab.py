@@ -4,7 +4,7 @@ from __future__ import annotations
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView, QButtonGroup, QHBoxLayout, QHeaderView, QLabel, QRadioButton, QStyledItemDelegate,
+    QAbstractItemView, QButtonGroup, QHBoxLayout, QHeaderView, QLabel, QPushButton, QRadioButton, QStyledItemDelegate,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -47,6 +47,9 @@ class DiskMapTab(QWidget):
             self.modes[key] = rb
             row.addWidget(rb)
         row.addStretch(1)
+        self.btn_csv = QPushButton(tr("Экспорт в CSV"))
+        self.btn_csv.clicked.connect(self.export_table)
+        row.addWidget(self.btn_csv)
         lay.addLayout(row)
         self.table = QTableWidget(0, 4)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -66,6 +69,23 @@ class DiskMapTab(QWidget):
         for rb in self.modes.values():  # подключаем после создания таблицы
             rb.toggled.connect(lambda on: on and self.refresh())
         self.refresh()
+
+    def export_table(self) -> None:
+        """Сохраняет в CSV то, что сейчас показано в таблице (крупные файлы, папки или типы)."""
+        from PySide6.QtWidgets import QFileDialog
+
+        from ..exporting import write_csv
+        if not self.table.rowCount():
+            self.info.setText(tr("Нет результатов для экспорта."))
+            return
+        dest, _ = QFileDialog.getSaveFileName(self, tr("Экспорт результатов"), "filepilot-diskmap.csv", "CSV (*.csv)")
+        if not dest:
+            return
+        header = [self.table.horizontalHeaderItem(c).text() for c in range(self.table.columnCount())]
+        rows = [[self.table.item(r, c).text() if self.table.item(r, c) else "" for c in range(self.table.columnCount())]
+                for r in range(self.table.rowCount())]
+        n = write_csv(header, rows, dest)
+        self.info.setText(tr('Сохранено строк: {0} → {1}').format(n, dest))
 
     def _fill(self, headers, rows, stretch_col=0, size_col=1):
         self.table.setColumnCount(len(headers))
