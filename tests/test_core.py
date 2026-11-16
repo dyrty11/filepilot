@@ -428,3 +428,13 @@ def test_name_operator(tmp_path):
     assert names("пусто name:договор") == ["договор_2025.txt"]
     assert names("hello name:договор") == []
     assert search.query_words("name:договор текст") == ["текст"]
+
+
+def test_tray_and_hotkey_settings_roundtrip():
+    s = Settings(); s.tray = True; s.hotkey = True
+    save_settings(s)
+    got = load_settings()
+    assert got.tray is True and got.hotkey is True
+    from filepilot.config import settings_path
+    settings_path().write_text('{"tray": "да", "hotkey": null}', encoding="utf-8")
+    assert load_settings().hotkey is False

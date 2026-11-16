@@ -2,6 +2,11 @@
 
 Full history in Russian: [CHANGELOG.md](CHANGELOG.md).
 
+## 0.9.0
+- Tray icon: the "Window" menu → "Minimize to tray on close". The close button hides the window while indexing and the background refresh keep running. Click the icon to open the window; right-click gives "Open and search", "Index" and "Quit".
+- Hotkey Ctrl+Alt+F (Windows, turned on in the "Window" menu): shows the FilePilot window and puts the cursor in the search box from any program. If another program already uses the combination, FilePilot tells you.
+- Both features are off by default.
+
 ## 0.8.0
 - The `newer:7` operator in the search box: only files changed in the last 7 days (the counterpart of `older:`).
 - The `name:invoice` operator searches the file name only, not the contents: `name:invoice ext:pdf`.

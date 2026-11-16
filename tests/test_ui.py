@@ -288,3 +288,44 @@ def test_sort_results_by_header(app, tmp_path):
     st._header_clicked(1); st._header_clicked(1)
     assert st._sort is None
     w.close()
+
+
+def test_tray_hides_window_instead_of_closing(app, monkeypatch):
+    from PySide6.QtWidgets import QApplication, QSystemTrayIcon
+    monkeypatch.setattr(QSystemTrayIcon, "isSystemTrayAvailable", staticmethod(lambda: True))
+    monkeypatch.setattr(QSystemTrayIcon, "showMessage", lambda *a, **k: None)
+    s = load_settings(); s.tray = True; save_settings(s)
+    w = MainWindow(); w.show()
+    assert w.tray is not None and w.act_tray.isChecked()
+    assert QApplication.quitOnLastWindowClosed() is False
+    w.close()
+    assert w.isHidden() and w._quitting is False  # окно спрятано, программа живёт
+    w.show_and_search()
+    assert w.isVisible() and w.tabs.currentIndex() == 0
+    w.act_tray.trigger()  # выключили трей: закрытие снова настоящее
+    assert load_settings().tray is False and QApplication.quitOnLastWindowClosed() is True
+    w.close()
+    assert w.isHidden()
+
+
+def test_tray_unavailable_is_safe(app, monkeypatch):
+    from PySide6.QtWidgets import QSystemTrayIcon
+    monkeypatch.setattr(QSystemTrayIcon, "isSystemTrayAvailable", staticmethod(lambda: False))
+    s = load_settings(); s.tray = True; save_settings(s)
+    w = MainWindow()
+    assert w.tray is None and not w.act_tray.isEnabled() and not w.act_tray.isChecked()
+    w.show(); w.close()
+    assert w.isHidden()  # без трея закрытие обычное
+
+
+def test_hotkey_message_parsing():
+    import ctypes
+    from ctypes import wintypes
+    from filepilot import hotkey
+    msg = wintypes.MSG(); msg.message = hotkey.WM_HOTKEY; msg.wParam = hotkey.HOTKEY_ID
+    assert hotkey.is_hotkey_message(ctypes.addressof(msg))
+    msg.wParam = 1
+    assert not hotkey.is_hotkey_message(ctypes.addressof(msg))
+    msg.message = 0x0100; msg.wParam = hotkey.HOTKEY_ID
+    assert not hotkey.is_hotkey_message(ctypes.addressof(msg))
+    assert hotkey.GlobalHotkey(lambda: None).register() is False or hotkey.GlobalHotkey.supported()

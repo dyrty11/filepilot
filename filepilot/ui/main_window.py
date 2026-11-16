@@ -109,6 +109,7 @@ class MainWindow(QMainWindow):
         upd_btn.setMenu(upd_menu)
         tb.addWidget(upd_btn)
         self._update_task: Task | None = None
+        self._init_tray_and_hotkey(tb)
         self.act_find = QAction(self)
         self.act_find.setShortcut("Ctrl+F")
         self.act_find.triggered.connect(lambda: (self.tabs.setCurrentIndex(0), self.search_tab.query.setFocus()))
@@ -388,7 +389,92 @@ class MainWindow(QMainWindow):
         self.refresh_views()
         self.status.setText(tr('Индекс очищен ({0} записей).').format(n))
 
+    # --- трей и горячая клавиша ---
+    def _init_tray_and_hotkey(self, tb) -> None:
+        from PySide6.QtWidgets import QSystemTrayIcon
+        from ..hotkey import HOTKEY_TEXT, GlobalHotkey
+        self._quitting = False
+        self._tray_told = False
+        self.tray = None
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self.tray = QSystemTrayIcon(app_icon(), self)
+            self.tray.setToolTip("FilePilot")
+            menu = QMenu(self)
+            menu.addAction(tr("Открыть и искать"), self.show_and_search)
+            menu.addAction(tr("Индексировать"), self.start_index)
+            menu.addSeparator()
+            menu.addAction(tr("Выход"), self.quit_app)
+            self.tray.setContextMenu(menu)
+            self._tray_menu = menu
+            self.tray.activated.connect(lambda reason: self.show_and_search() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
+        self._hotkey = GlobalHotkey(self.show_and_search)
+        btn = QToolButton()
+        btn.setText(tr("Окно"))
+        btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = QMenu(btn)
+        self.act_tray = menu.addAction(tr("Сворачивать в трей при закрытии"))
+        self.act_tray.setCheckable(True)
+        self.act_tray.setChecked(self.settings.tray and self.tray is not None)
+        self.act_tray.setEnabled(self.tray is not None)
+        self.act_tray.triggered.connect(self._toggle_tray)
+        self._apply_tray(self.act_tray.isChecked())
+        self.act_hotkey = menu.addAction(tr("Горячая клавиша {0}: показать окно и искать").format(HOTKEY_TEXT))
+        self.act_hotkey.setCheckable(True)
+        self.act_hotkey.setEnabled(GlobalHotkey.supported())
+        self.act_hotkey.triggered.connect(self._toggle_hotkey)
+        btn.setMenu(menu)
+        tb.addWidget(btn)
+        if self.settings.hotkey and GlobalHotkey.supported():
+            self.act_hotkey.setChecked(self._hotkey.register())
+
+    def _apply_tray(self, on: bool) -> None:
+        if self.tray is not None:
+            self.tray.setVisible(on)
+        # со значком в трее закрытое окно не должно завершать программу
+        QApplication.setQuitOnLastWindowClosed(not on)
+
+    def _toggle_tray(self, on: bool) -> None:
+        self.settings.tray = bool(on)
+        self._apply_tray(bool(on))
+        save_settings(self.settings)
+
+    def _toggle_hotkey(self, on: bool) -> None:
+        if on:
+            ok = self._hotkey.register()
+            self.act_hotkey.setChecked(ok)
+            self.settings.hotkey = ok
+            if not ok:
+                QMessageBox.warning(self, "FilePilot", tr("Не удалось занять сочетание клавиш: возможно, его уже использует другая программа."))
+        else:
+            self._hotkey.unregister()
+            self.settings.hotkey = False
+        save_settings(self.settings)
+
+    def show_and_search(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        self.tabs.setCurrentIndex(0)
+        self.search_tab.query.setFocus()
+        self.search_tab.query.selectAll()
+
+    def quit_app(self) -> None:
+        self._quitting = True
+        self.close()
+        QApplication.quit()
+
     def closeEvent(self, e) -> None:
+        if self.settings.tray and self.tray is not None and not self._quitting:
+            e.ignore()  # индексация и фоновое обновление продолжаются, окно прячется в трей
+            self.hide()
+            if not self._tray_told:
+                self._tray_told = True
+                self.tray.showMessage("FilePilot", tr("Программа продолжает работать в трее. Выход: правый клик по значку."), self.tray.icon(), 4000)
+            return
+        self._hotkey.unregister()
+        if self.tray is not None:
+            self.tray.hide()
+        QApplication.setQuitOnLastWindowClosed(True)
         save_settings(self.settings)
         for t in (self._task, self.dupes_tab._task, self.rules_tab._task, self._update_task):
             if t is not None:

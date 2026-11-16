@@ -209,4 +209,11 @@ EN = {
     "Освободить место на диске: индекс сжимается, файлы не затрагиваются": "Free disk space: the index is compacted, your files are not touched",
     "Сжимаю индекс…": "Compacting the index…",
     "Индекс сжат: {0} → {1}": "Index compacted: {0} → {1}",
+    "Открыть и искать": "Open and search",
+    "Выход": "Quit",
+    "Окно": "Window",
+    "Сворачивать в трей при закрытии": "Minimize to tray on close",
+    "Горячая клавиша {0}: показать окно и искать": "Hotkey {0}: show the window and search",
+    "Не удалось занять сочетание клавиш: возможно, его уже использует другая программа.": "Could not register the hotkey: another program may already be using it.",
+    "Программа продолжает работать в трее. Выход: правый клик по значку.": "FilePilot keeps running in the tray. To quit: right-click the icon.",
 }
