@@ -51,6 +51,7 @@ Windows SmartScreen may show an "Unknown publisher" warning: the installer is no
 |---|---|---|
 | `ext:` | extensions, comma-separated | `contract ext:pdf,docx` |
 | `in:` | search inside a folder | `in:"C:\Work" report` |
+| `name:` | search in the file name only | `name:invoice ext:pdf` |
 | `older:` | files older than N days | `older:30` |
 | `newer:` | changed in the last N days | `newer:7` |
 | `bigger:` / `smaller:` | size (`kb`, `mb`, `gb`, megabytes by default) | `bigger:5mb` |

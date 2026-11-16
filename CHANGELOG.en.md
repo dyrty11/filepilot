@@ -4,6 +4,8 @@ Full history in Russian: [CHANGELOG.md](CHANGELOG.md).
 
 ## 0.8.0
 - The `newer:7` operator in the search box: only files changed in the last 7 days (the counterpart of `older:`).
+- The `name:invoice` operator searches the file name only, not the contents: `name:invoice ext:pdf`.
+- Search results sort by clicking a column header (path, size, date): ascending, descending, then back to relevance. The choice is kept between searches.
 - A "Compact index" button (and the `filepilot optimize` command): the index is compacted and free space goes back to the disk. The index size is shown in the status line and in `filepilot stats`.
 
 ## 0.7.0
