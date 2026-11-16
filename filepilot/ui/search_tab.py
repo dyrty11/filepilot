@@ -66,7 +66,7 @@ class SearchTab(QWidget):
         self.query = QLineEdit()
         self.query.setPlaceholderText(tr('Поиск по содержимому, например "договор 2024" (кавычки: точная фраза)'))
         self.query.setClearButtonEnabled(True)
-        self.query.setToolTip(tr('Операторы в строке поиска:\next:pdf,docx — типы файлов\nin:"C:\\Папка" — только в этой папке\nolder:30 — старше 30 дней\nnewer:7 — изменены за последние 7 дней\nbigger:5mb, smaller:100kb — размер\nAND, OR, NOT и "точная фраза" тоже работают'))
+        self.query.setToolTip(tr('Операторы в строке поиска:\next:pdf,docx — типы файлов\nin:"C:\\Папка" — только в этой папке\nname:отчёт — только в имени файла\nolder:30 — старше 30 дней\nnewer:7 — изменены за последние 7 дней\nbigger:5mb, smaller:100kb — размер\nAND, OR, NOT и "точная фраза" тоже работают'))
         self._history = QStringListModel(self.settings.history, self)
         completer = QCompleter(self._history, self)
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
@@ -135,6 +135,9 @@ class SearchTab(QWidget):
         split.setStretchFactor(1, 2)
         lay.addWidget(split, 1)
         self._results: list[dict] = []
+        self._sort: tuple[int, bool] | None = None  # (колонка, по возрастанию); None — по релевантности
+        self.table.horizontalHeader().setSectionsClickable(True)
+        self.table.horizontalHeader().sectionClicked.connect(self._header_clicked)
         self.info = QLabel(tr("Добавьте папки и нажмите «Индексировать», затем введите запрос."))
         lay.addWidget(self.info)
 
@@ -203,6 +206,8 @@ class SearchTab(QWidget):
         self._timer.stop()
         res = search(self.query.text(), self.current_filters())
         self._results = res
+        self._apply_sort()
+        res = self._results
         self.preview.clear()
         self.table.setRowCount(len(res))
         for r, item in enumerate(res):
@@ -219,6 +224,30 @@ class SearchTab(QWidget):
             self.info.setText(tr("Введите запрос или задайте фильтры."))
         else:
             self.info.setText(tr('Найдено: {0}').format(len(res)) + (tr(" (показаны первые 300)") if len(res) >= 300 else ""))
+
+    _SORT_KEYS = {0: lambda r: r["path"].casefold(), 1: lambda r: r["size"], 2: lambda r: r["mtime"]}
+
+    def _apply_sort(self) -> None:
+        hh = self.table.horizontalHeader()
+        if self._sort is None:
+            hh.setSortIndicatorShown(False)
+            return
+        col, asc = self._sort
+        self._results = sorted(self._results, key=self._SORT_KEYS[col], reverse=not asc)
+        hh.setSortIndicatorShown(True)
+        hh.setSortIndicator(col, Qt.SortOrder.AscendingOrder if asc else Qt.SortOrder.DescendingOrder)
+
+    def _header_clicked(self, col: int) -> None:
+        """Клик по заголовку: по возрастанию, ещё клик: по убыванию, третий: снова по релевантности."""
+        if col not in self._SORT_KEYS:
+            return
+        if self._sort is None or self._sort[0] != col:
+            self._sort = (col, True)
+        elif self._sort[1]:
+            self._sort = (col, False)
+        else:
+            self._sort = None
+        self.run_search()
 
     def selected_path(self) -> str | None:
         rows = self.table.selectionModel().selectedRows()

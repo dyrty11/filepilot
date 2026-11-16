@@ -199,7 +199,7 @@ EN = {
     "Исключения: папка целиком или маска имени (node_modules, *.tmp, ~$*). Применяются при следующей индексации.": "Exclusions: a whole folder or a name mask (node_modules, *.tmp, ~$*). Applied on the next indexing.",
     "Исключить по маске": "Exclude by mask",
     "Маска имени (например node_modules или *.tmp):": "Name mask (e.g. node_modules or *.tmp):",
-    'Операторы в строке поиска:\next:pdf,docx — типы файлов\nin:"C:\\Папка" — только в этой папке\nolder:30 — старше 30 дней\nnewer:7 — изменены за последние 7 дней\nbigger:5mb, smaller:100kb — размер\nAND, OR, NOT и "точная фраза" тоже работают': 'Operators in the search box:\next:pdf,docx — file types\nin:"C:\\Folder" — only inside this folder\nolder:30 — older than 30 days\nnewer:7 — changed in the last 7 days\nbigger:5mb, smaller:100kb — size\nAND, OR, NOT and "exact phrase" work too',
+    'Операторы в строке поиска:\next:pdf,docx — типы файлов\nin:"C:\\Папка" — только в этой папке\nname:отчёт — только в имени файла\nolder:30 — старше 30 дней\nnewer:7 — изменены за последние 7 дней\nbigger:5mb, smaller:100kb — размер\nAND, OR, NOT и "точная фраза" тоже работают': 'Operators in the search box:\next:pdf,docx — file types\nin:"C:\\Folder" — only inside this folder\nname:report — in the file name only\nolder:30 — older than 30 days\nnewer:7 — changed in the last 7 days\nbigger:5mb, smaller:100kb — size\nAND, OR, NOT and "exact phrase" work too',
     "Группа": "Group",
     "Копий": "Copies",
     "Индексация: {0} файлов, {1}": "Indexing: {0} files, {1}",

@@ -264,3 +264,27 @@ def test_optimize_button(app, tmp_path):
     assert wait_until(lambda: w._task is None)
     assert "Индекс сжат" in w.status.text() and w.act_optimize.isEnabled()
     w.close()
+
+
+def test_sort_results_by_header(app, tmp_path):
+    root = tmp_path / "docs"; root.mkdir()
+    (root / "b.txt").write_text("слово " * 50, encoding="utf-8")
+    (root / "a.txt").write_text("слово", encoding="utf-8")
+    (root / "c.txt").write_text("слово " * 5, encoding="utf-8")
+    s = load_settings(); s.add_folder(str(root)); save_settings(s)
+    w = MainWindow(); w.show(); w.start_index()
+    assert wait_until(lambda: w._task is None)
+    st = w.search_tab
+    st.query.setText("слово"); st.run_search()
+    col = lambda: [os.path.basename(st.table.item(r, 0).text()) for r in range(st.table.rowCount())]
+    st._header_clicked(0)
+    assert col() == ["a.txt", "b.txt", "c.txt"]
+    st._header_clicked(0)
+    assert col() == ["c.txt", "b.txt", "a.txt"]
+    st._header_clicked(1)
+    assert col() == ["a.txt", "c.txt", "b.txt"]  # по размеру, по возрастанию
+    st.run_search()  # сортировка переживает новый поиск
+    assert col() == ["a.txt", "c.txt", "b.txt"]
+    st._header_clicked(1); st._header_clicked(1)
+    assert st._sort is None
+    w.close()

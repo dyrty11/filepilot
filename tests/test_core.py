@@ -410,3 +410,21 @@ def test_optimize_index_shrinks_and_keeps_data(tmp_path):
     r = db.optimize_index()
     assert r["after"] <= r["before"]
     assert db.stats()["files"] == st["files"] and search.search("договор")
+
+
+def test_name_operator(tmp_path):
+    root = tmp_path / "root"
+    make_tree(root)
+    (root / "договор_2025.txt").write_text("пусто", encoding="utf-8")
+    indexer.index_folders([str(root)])
+    names = lambda q: sorted(Path(r["path"]).name for r in search.search(q))  # noqa: E731
+    # без оператора слово находится и в содержимом, и в имени
+    assert names("договор") == ["dogovor.txt", "договор_2025.txt"]
+    # name: ищет только в имени файла
+    assert names("name:договор") == ["договор_2025.txt"]
+    assert names("name:dogovor") == ["dogovor.txt"]
+    assert names("name:договор ext:log") == []
+    assert names('name:"договор 2025"') == ["договор_2025.txt"]
+    assert names("пусто name:договор") == ["договор_2025.txt"]
+    assert names("hello name:договор") == []
+    assert search.query_words("name:договор текст") == ["текст"]

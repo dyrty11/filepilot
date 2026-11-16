@@ -21,9 +21,10 @@ class Filters:
     older_days: int | None = None
     newer_days: int | None = None  # только изменённые за последние N дней
     folder: str | None = None  # искать только внутри этой папки (с подпапками)
+    name: str | None = None  # искать только в имени файла, не в содержимом
 
     def active(self) -> bool:
-        return bool(self.exts or self.min_kb or self.max_kb or self.older_days or self.newer_days or self.folder)
+        return bool(self.exts or self.min_kb or self.max_kb or self.older_days or self.newer_days or self.folder or self.name)
 
 
 def parse_exts(text: str) -> list[str]:
@@ -36,7 +37,7 @@ def parse_exts(text: str) -> list[str]:
     return out
 
 
-_OP_RX = re.compile(r'"[^"]*"|(?<!\S)(ext|in|older|newer|bigger|smaller):(?:"([^"]*)"|(\S+))', re.IGNORECASE)
+_OP_RX = re.compile(r'"[^"]*"|(?<!\S)(ext|in|name|older|newer|bigger|smaller):(?:"([^"]*)"|(\S+))', re.IGNORECASE)
 _SIZE_RX = re.compile(r"^(\d+(?:[.,]\d+)?)\s*(kb|кб|mb|мб|gb|гб)?$", re.IGNORECASE)
 _UNIT_KB = {"kb": 1, "кб": 1, "mb": 1024, "мб": 1024, "gb": 1024 * 1024}
 
@@ -51,7 +52,7 @@ def _size_kb(text: str) -> int | None:
 
 
 def parse_operators(query: str) -> tuple[str, Filters]:
-    """Достаёт из строки поиска операторы: ext:pdf,docx  in:"C:\\Мои документы"  older:30  newer:7  bigger:5mb  smaller:100kb.
+    """Достаёт из строки поиска операторы: ext:pdf,docx  name:отчёт  in:"C:\\Мои документы"  older:30  newer:7  bigger:5mb  smaller:100kb.
     Возвращает (текст без операторов, фильтры из операторов). Фразы в кавычках не трогаются."""
     ops = Filters()
 
@@ -63,6 +64,8 @@ def parse_operators(query: str) -> tuple[str, Filters]:
         key = key.lower()
         if key == "ext":
             ops.exts = parse_exts(val)
+        elif key == "name":
+            ops.name = val or None
         elif key == "in":
             ops.folder = val or None
         elif key == "older":
@@ -82,7 +85,8 @@ def parse_operators(query: str) -> tuple[str, Filters]:
 def merge_filters(base: Filters, ops: Filters) -> Filters:
     """Оператор в строке поиска сильнее поля в панели фильтров."""
     return Filters(exts=ops.exts or base.exts, min_kb=ops.min_kb or base.min_kb, max_kb=ops.max_kb or base.max_kb,
-                   older_days=ops.older_days or base.older_days, newer_days=ops.newer_days or base.newer_days, folder=ops.folder or base.folder)
+                   older_days=ops.older_days or base.older_days, newer_days=ops.newer_days or base.newer_days, folder=ops.folder or base.folder,
+                   name=ops.name or base.name)
 
 
 def build_fts_query(q: str) -> str:
@@ -134,13 +138,16 @@ def search(query: str, filters: Filters | None = None, limit: int = 300) -> list
     f = merge_filters(filters or Filters(), ops)
     conn = get_db()
     params: list = []
-    if not q:
+    if not q and not f.name:
         if not f.active():
             return []
         sql = "SELECT f.path, f.name, f.size, f.mtime, '' AS snippet FROM files f WHERE 1=1" + _where(f, params) + " ORDER BY f.mtime DESC LIMIT ?"
         return [dict(r) for r in conn.execute(sql, params + [limit])]
 
     fts = build_fts_query(q)
+    name_fts = build_fts_query(f.name) if f.name else ""
+    if name_fts:  # name:слово: ищем только в имени файла
+        fts = f"({fts}) AND name : ({name_fts})" if fts else f"name : ({name_fts})"
     if fts:
         params = [fts]
         sql = (
@@ -154,6 +161,13 @@ def search(query: str, filters: Filters | None = None, limit: int = 300) -> list
         except sqlite3.OperationalError:
             pass  # некорректный запрос: ищем простым LIKE
     params = []
+    if f.name:  # запасной путь тоже уважает name:
+        nl_ = "%" + f.name.replace("%", r"\%").replace("_", r"\_") + "%"
+        extra = " AND f.name LIKE ? ESCAPE '\\'"
+        like = "%" + q.replace("%", r"\%").replace("_", r"\_") + "%"
+        sql = ("SELECT f.path, f.name, f.size, f.mtime, '' AS snippet FROM files f WHERE (f.name LIKE ? ESCAPE '\\' OR f.content LIKE ? ESCAPE '\\')"
+               + extra + _where(f, params) + " ORDER BY f.mtime DESC LIMIT ?")
+        return [dict(r) for r in conn.execute(sql, [like, like, nl_] + params + [limit])]
     like = "%" + q.replace("%", r"\%").replace("_", r"\_") + "%"
     sql = (
         "SELECT f.path, f.name, f.size, f.mtime, substr(f.content, 1, 200) AS snippet FROM files f "
