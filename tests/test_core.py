@@ -381,3 +381,32 @@ def test_progress_is_throttled_and_total_unknown_first_time(tmp_path):
     calls.clear()
     indexer.index_folders([str(root)], on_progress=lambda i, n, p: calls.append((i, n)))
     assert calls[0][1] == 5  # повторный проход знает, сколько файлов ждать
+
+
+def test_newer_operator(tmp_path):
+    root = tmp_path / "root"
+    make_tree(root)
+    old = root / "docs" / "old.log"
+    t = time.time() - 40 * 86400
+    os.utime(old, (t, t))
+    indexer.index_folders([str(root)])
+    names = lambda q: sorted(Path(r["path"]).name for r in search.search(q))  # noqa: E731
+    assert "old.log" not in names("ext:log,txt newer:7") and "a.txt" in names("hello newer:7")
+    assert names("ext:log newer:60") == ["old.log"]
+    assert names("ext:log older:30") == ["old.log"] and names("ext:log newer:7") == []
+    assert search.parse_operators("newer:abc")[1].newer_days is None
+
+
+def test_optimize_index_shrinks_and_keeps_data(tmp_path):
+    root = tmp_path / "root"
+    make_tree(root)
+    for i in range(300):
+        (root / f"f{i}.txt").write_text("слово " * 500 + str(i), encoding="utf-8")
+    indexer.index_folders([str(root)])
+    db.clear_index()
+    indexer.index_folders([str(root)])
+    st = db.stats()
+    assert st["db_bytes"] > 0
+    r = db.optimize_index()
+    assert r["after"] <= r["before"]
+    assert db.stats()["files"] == st["files"] and search.search("договор")

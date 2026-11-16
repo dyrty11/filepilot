@@ -66,7 +66,7 @@ class SearchTab(QWidget):
         self.query = QLineEdit()
         self.query.setPlaceholderText(tr('Поиск по содержимому, например "договор 2024" (кавычки: точная фраза)'))
         self.query.setClearButtonEnabled(True)
-        self.query.setToolTip(tr('Операторы в строке поиска:\next:pdf,docx — типы файлов\nin:"C:\\Папка" — только в этой папке\nolder:30 — старше 30 дней\nbigger:5mb, smaller:100kb — размер\nAND, OR, NOT и "точная фраза" тоже работают'))
+        self.query.setToolTip(tr('Операторы в строке поиска:\next:pdf,docx — типы файлов\nin:"C:\\Папка" — только в этой папке\nolder:30 — старше 30 дней\nnewer:7 — изменены за последние 7 дней\nbigger:5mb, smaller:100kb — размер\nAND, OR, NOT и "точная фраза" тоже работают'))
         self._history = QStringListModel(self.settings.history, self)
         completer = QCompleter(self._history, self)
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)

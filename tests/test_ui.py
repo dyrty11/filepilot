@@ -251,3 +251,16 @@ def test_adding_whole_drive_asks_first(app, monkeypatch):
     assert w.add_folders([root]) == 0 and asked == [1]
     assert root not in w.settings.folders
     w.close()
+
+
+def test_optimize_button(app, tmp_path):
+    root = tmp_path / "docs"; root.mkdir()
+    (root / "a.txt").write_text("Договор поставки", encoding="utf-8")
+    s = load_settings(); s.add_folder(str(root)); save_settings(s)
+    w = MainWindow(); w.show(); w.start_index()
+    assert wait_until(lambda: w._task is None)
+    assert "Размер индекса" in w._summary()
+    w.act_optimize.trigger()
+    assert wait_until(lambda: w._task is None)
+    assert "Индекс сжат" in w.status.text() and w.act_optimize.isEnabled()
+    w.close()

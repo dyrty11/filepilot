@@ -2,6 +2,10 @@
 
 Full history in Russian: [CHANGELOG.md](CHANGELOG.md).
 
+## 0.8.0
+- The `newer:7` operator in the search box: only files changed in the last 7 days (the counterpart of `older:`).
+- A "Compact index" button (and the `filepilot optimize` command): the index is compacted and free space goes back to the disk. The index size is shown in the status line and in `filepilot stats`.
+
 ## 0.7.0
 - Indexing a whole drive is now safe and faster: system folders at the drive root (Windows, Program Files, ProgramData, Recycle Bin) and AppData are skipped, junctions are not followed, and cloud placeholders (OneDrive etc.) are not read so nothing gets downloaded.
 - Folder scanning is faster: size and dates come straight from the scan with no extra disk calls (50,000 files are scanned in a fraction of a second). The progress counter no longer floods the UI, and a re-index shows a percentage based on the previous pass.

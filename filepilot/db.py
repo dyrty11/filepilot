@@ -100,4 +100,22 @@ def clear_index() -> int:
 def stats() -> dict:
     conn = get_db()
     row = conn.execute("SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS total FROM files").fetchone()
-    return {"files": row["n"], "bytes": row["total"]}
+    try:
+        db_bytes = sum(p.stat().st_size for p in db_path().parent.glob(db_path().name + "*"))  # база + служебные файлы WAL
+    except OSError:
+        db_bytes = 0
+    return {"files": row["n"], "bytes": row["total"], "db_bytes": db_bytes}
+
+
+def optimize_index() -> dict:
+    """Сжимает индекс: сливает сегменты полнотекстового поиска и возвращает свободное место диску (VACUUM).
+    Возвращает размер базы до и после."""
+    conn = get_db()
+    before = stats()["db_bytes"]
+    conn.commit()
+    conn.execute("INSERT INTO files_fts(files_fts) VALUES('optimize')")
+    conn.commit()
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    conn.execute("VACUUM")
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    return {"before": before, "after": stats()["db_bytes"]}

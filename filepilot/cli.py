@@ -111,7 +111,13 @@ def _cmd_clear(a) -> int:
 
 def _cmd_stats(a) -> int:
     st = db.stats()
-    _out(st, a.json, [f"Файлов в индексе: {st['files']}, объём: {human_size(st['bytes'])}"])
+    _out(st, a.json, [f"Файлов в индексе: {st['files']}, объём: {human_size(st['bytes'])}, размер индекса: {human_size(st['db_bytes'])}"])
+    return 0
+
+
+def _cmd_optimize(a) -> int:
+    r = db.optimize_index()
+    _out(r, a.json, [f"Индекс сжат: {human_size(r['before'])} → {human_size(r['after'])}"])
     return 0
 
 
@@ -135,6 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--name"); s.add_argument("--apply", action="store_true", help="выполнить (по умолчанию пробный запуск)"); s.set_defaults(func=_cmd_rules)
     s = sub.add_parser("clear", help="очистить индекс"); s.set_defaults(func=_cmd_clear)
     s = sub.add_parser("stats", help="статистика индекса"); s.set_defaults(func=_cmd_stats)
+    s = sub.add_parser("optimize", help="сжать индекс (освободить место на диске)"); s.set_defaults(func=_cmd_optimize)
     return p
 
 

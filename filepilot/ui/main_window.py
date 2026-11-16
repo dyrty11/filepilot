@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__, changelog, db, indexer, updater
-from ..config import DOWNLOAD_URL, REPO_URL, SITE_URL, settings_path
+from ..config import DOWNLOAD_URL, REPO_URL, SITE_URL, human_size, settings_path
 from ..i18n import tr
 from ..settings import load_settings, save_settings
 from .diskmap_tab import DiskMapTab
@@ -62,6 +62,7 @@ class MainWindow(QMainWindow):
         self.act_refresh = self._action(tb, tr("Обновить"), self.refresh_views, tr("Перечитать данные на вкладках (F5)"), "F5")
         tb.addSeparator()
         self.act_clear = self._action(tb, tr("Очистить индекс"), self.clear_index, tr("Удалить всё из индекса (сами файлы не затрагиваются)"))
+        self.act_optimize = self._action(tb, tr("Сжать индекс"), self.optimize_index, tr("Освободить место на диске: индекс сжимается, файлы не затрагиваются"))
         self.act_auto = self._action(tb, tr("Автоиндекс при запуске"), self._toggle_auto, tr("Индексировать папки при каждом запуске"))
         self.act_auto.setCheckable(True)
         self.act_auto.setChecked(self.settings.auto_index)
@@ -245,7 +246,7 @@ class MainWindow(QMainWindow):
     def _summary(self) -> str:
         st = db.stats()
         folders = len(self.settings.folders)
-        return tr('В индексе файлов: {0}. Папок: {1}.').format(st['files'], folders) if st["files"] else tr("Индекс пуст. Добавьте папку и нажмите «Индексировать».")
+        return tr('В индексе файлов: {0}. Папок: {1}. Размер индекса: {2}.').format(st['files'], folders, human_size(st['db_bytes'])) if st["files"] else tr("Индекс пуст. Добавьте папку и нажмите «Индексировать».")
 
     # --- действия ---
     def add_folder(self) -> None:
@@ -335,6 +336,7 @@ class MainWindow(QMainWindow):
         self.act_index.setEnabled(not on)
         self.act_add.setEnabled(not on)
         self.act_clear.setEnabled(not on)
+        self.act_optimize.setEnabled(not on)
         self.act_cancel.setEnabled(on)
 
     def cancel_task(self) -> None:
@@ -362,6 +364,22 @@ class MainWindow(QMainWindow):
     def _tab_changed(self, i: int) -> None:
         if self.tabs.widget(i) is self.disk_tab:
             self.disk_tab.refresh()
+
+    def optimize_index(self) -> None:
+        if self._task:
+            return
+        self._busy(True)
+        self.act_cancel.setEnabled(False)  # сжатие нельзя прервать на середине
+        self.status.setText(tr("Сжимаю индекс…"))
+        self._task = Task(lambda progress, cancel: db.optimize_index(), self)
+        self._task.done.connect(self._optimize_done)
+        self._task.failed.connect(self._index_failed)
+        self._task.start()
+
+    def _optimize_done(self, r: dict) -> None:
+        self._task = None
+        self._busy(False)
+        self.status.setText(tr('Индекс сжат: {0} → {1}').format(human_size(r["before"]), human_size(r["after"])))
 
     def clear_index(self) -> None:
         if QMessageBox.question(self, "FilePilot", tr("Очистить индекс? Ваши файлы не будут затронуты, потом можно проиндексировать заново.")) != QMessageBox.StandardButton.Yes:

@@ -19,10 +19,11 @@ class Filters:
     min_kb: int | None = None
     max_kb: int | None = None
     older_days: int | None = None
+    newer_days: int | None = None  # только изменённые за последние N дней
     folder: str | None = None  # искать только внутри этой папки (с подпапками)
 
     def active(self) -> bool:
-        return bool(self.exts or self.min_kb or self.max_kb or self.older_days or self.folder)
+        return bool(self.exts or self.min_kb or self.max_kb or self.older_days or self.newer_days or self.folder)
 
 
 def parse_exts(text: str) -> list[str]:
@@ -35,7 +36,7 @@ def parse_exts(text: str) -> list[str]:
     return out
 
 
-_OP_RX = re.compile(r'"[^"]*"|(?<!\S)(ext|in|older|bigger|smaller):(?:"([^"]*)"|(\S+))', re.IGNORECASE)
+_OP_RX = re.compile(r'"[^"]*"|(?<!\S)(ext|in|older|newer|bigger|smaller):(?:"([^"]*)"|(\S+))', re.IGNORECASE)
 _SIZE_RX = re.compile(r"^(\d+(?:[.,]\d+)?)\s*(kb|кб|mb|мб|gb|гб)?$", re.IGNORECASE)
 _UNIT_KB = {"kb": 1, "кб": 1, "mb": 1024, "мб": 1024, "gb": 1024 * 1024}
 
@@ -50,7 +51,7 @@ def _size_kb(text: str) -> int | None:
 
 
 def parse_operators(query: str) -> tuple[str, Filters]:
-    """Достаёт из строки поиска операторы: ext:pdf,docx  in:"C:\\Мои документы"  older:30  bigger:5mb  smaller:100kb.
+    """Достаёт из строки поиска операторы: ext:pdf,docx  in:"C:\\Мои документы"  older:30  newer:7  bigger:5mb  smaller:100kb.
     Возвращает (текст без операторов, фильтры из операторов). Фразы в кавычках не трогаются."""
     ops = Filters()
 
@@ -66,6 +67,8 @@ def parse_operators(query: str) -> tuple[str, Filters]:
             ops.folder = val or None
         elif key == "older":
             ops.older_days = int(val) if val.isdigit() and int(val) > 0 else None
+        elif key == "newer":
+            ops.newer_days = int(val) if val.isdigit() and int(val) > 0 else None
         elif key == "bigger":
             ops.min_kb = _size_kb(val)
         elif key == "smaller":
@@ -79,7 +82,7 @@ def parse_operators(query: str) -> tuple[str, Filters]:
 def merge_filters(base: Filters, ops: Filters) -> Filters:
     """Оператор в строке поиска сильнее поля в панели фильтров."""
     return Filters(exts=ops.exts or base.exts, min_kb=ops.min_kb or base.min_kb, max_kb=ops.max_kb or base.max_kb,
-                   older_days=ops.older_days or base.older_days, folder=ops.folder or base.folder)
+                   older_days=ops.older_days or base.older_days, newer_days=ops.newer_days or base.newer_days, folder=ops.folder or base.folder)
 
 
 def build_fts_query(q: str) -> str:
@@ -115,6 +118,9 @@ def _where(f: Filters, params: list) -> str:
     if f.older_days:
         cond.append("f.mtime <= ?")
         params.append(time.time() - f.older_days * 86400)
+    if f.newer_days:
+        cond.append("f.mtime >= ?")
+        params.append(time.time() - f.newer_days * 86400)
     if f.folder:
         base = os.path.normpath(f.folder).rstrip("\\/")
         esc = base.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
