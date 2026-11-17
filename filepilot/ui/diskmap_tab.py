@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QRect, Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QMenu,
     QAbstractItemView, QButtonGroup, QHBoxLayout, QHeaderView, QLabel, QPushButton, QRadioButton, QStyledItemDelegate,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
@@ -12,6 +13,7 @@ from ..i18n import tr
 from .. import diskmap
 from ..config import format_time, human_size
 from .charts import DonutChart
+from .file_actions import fill_menu, trash_dialog
 from .theme import ACCENT, reveal_in_folder
 
 
@@ -58,6 +60,9 @@ class DiskMapTab(QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.setItemDelegateForColumn(1, BarDelegate(self.table))
         self.table.doubleClicked.connect(self._reveal)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._menu)
+        QShortcut(QKeySequence(Qt.Key.Key_Delete), self.table, self.trash_selected, context=Qt.ShortcutContext.WidgetShortcut)
         self.chart = DonutChart()
         body = QHBoxLayout()
         body.addWidget(self.table, 1)
@@ -110,7 +115,7 @@ class DiskMapTab(QWidget):
             top = data[0]["size"] if data else 1
             self._fill([tr("Файл"), tr("Размер"), tr("Изменён")], [[(d["path"], None), (human_size(d["size"]), d["size"] / (top or 1)), (format_time(d["mtime"]), None)] for d in data])
             self.chart.setVisible(False)
-            self.info.setText(tr('Показано файлов: {0} (самые крупные). Двойной щелчок покажет файл в папке.').format(len(data)))
+            self.info.setText(tr('Показано файлов: {0} (самые крупные). Двойной щелчок покажет файл в папке, правый щелчок или Delete: действия с файлом.').format(len(data)))
         elif self.modes["folders"].isChecked():
             data = diskmap.by_folder(self.settings.folders)
             self._fill([tr("Папка"), tr("Размер"), tr("Файлов"), tr("Доля")], [[(_loc(d["folder"]), None), (human_size(d["size"]), d["share"]), (str(d["files"]), None), (f"{d['share'] * 100:.1f}%", None)] for d in data])
@@ -121,6 +126,26 @@ class DiskMapTab(QWidget):
             self._fill([tr("Тип"), tr("Размер"), tr("Файлов"), tr("Доля")], [[(_loc(d["ext"]), None), (human_size(d["size"]), d["share"]), (str(d["files"]), None), (f"{d['share'] * 100:.1f}%", None)] for d in data])
             self._chart([(_loc(d["ext"]), d["size"]) for d in data])
             self.info.setText(tr("Какие типы файлов занимают больше всего места."))
+
+    def selected_paths(self) -> list[str]:
+        if not self.modes["files"].isChecked():
+            return []  # действия с файлами только в списке крупных файлов
+        return [self.table.item(i.row(), 0).text() for i in self.table.selectionModel().selectedRows()]
+
+    def _files_changed(self, message: str) -> None:
+        self.refresh()
+        self.info.setText(message)
+
+    def trash_selected(self) -> None:
+        trash_dialog(self, self.selected_paths(), self._files_changed)
+
+    def _menu(self, pos) -> None:
+        paths = self.selected_paths()
+        if not paths:
+            return
+        m = QMenu(self)
+        fill_menu(m, self, paths, self._files_changed)
+        m.exec(self.table.viewport().mapToGlobal(pos))
 
     def _chart(self, items) -> None:
         top, other = diskmap.group_top(items, 7)

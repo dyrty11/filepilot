@@ -329,3 +329,78 @@ def test_hotkey_message_parsing():
     msg.message = 0x0100; msg.wParam = hotkey.HOTKEY_ID
     assert not hotkey.is_hotkey_message(ctypes.addressof(msg))
     assert hotkey.GlobalHotkey(lambda: None).register() is False or hotkey.GlobalHotkey.supported()
+
+
+def _window_with_files(tmp_path):
+    root = tmp_path / "docs"; root.mkdir()
+    (root / "big.bin").write_bytes(b"x" * 300_000)
+    (root / "small.txt").write_text("договор поставки", encoding="utf-8")
+    (root / "other.txt").write_text("договор аренды", encoding="utf-8")
+    s = load_settings(); s.add_folder(str(root)); save_settings(s)
+    w = MainWindow(); w.show(); w.start_index()
+    assert wait_until(lambda: w._task is None)
+    return root, w
+
+
+def test_delete_big_file_from_disk_map(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from filepilot import fileops
+    monkeypatch.setattr(fileops, "send2trash", lambda p: os.remove(p))
+    root, w = _window_with_files(tmp_path)
+    dm = w.disk_tab
+    dm.refresh()
+    assert dm.table.item(0, 0).text() == str(root / "big.bin")  # самый крупный сверху
+    dm.table.selectRow(0)
+    # отказ в подтверждении: файл на месте
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.StandardButton.No)
+    dm.trash_selected()
+    assert (root / "big.bin").exists()
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.StandardButton.Yes)
+    dm.trash_selected()
+    assert not (root / "big.bin").exists()
+    assert all(dm.table.item(r, 0).text() != str(root / "big.bin") for r in range(dm.table.rowCount()))
+    assert "В корзину отправлено: 1" in dm.info.text()
+    # в режимах «Папки» и «Типы» действий с файлами нет
+    dm.modes["types"].setChecked(True)
+    assert dm.selected_paths() == []
+    w.close()
+
+
+def test_search_tab_file_actions(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+    from filepilot import fileops
+    monkeypatch.setattr(fileops, "send2trash", lambda p: os.remove(p))
+    root, w = _window_with_files(tmp_path)
+    st = w.search_tab
+    st.query.setText("договор"); st.run_search()
+    assert st.table.rowCount() == 2
+    # переименование через диалог
+    st.table.selectRow(0)
+    target = st.selected_paths()[0]
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("новое.txt", True))
+    from filepilot.ui.file_actions import rename_dialog
+    rename_dialog(st, target, st._files_changed)
+    assert (root / "новое.txt").exists() and "Переименовано" in st.info.text()
+    # перенос выбранных файлов
+    out = tmp_path / "out"; out.mkdir()
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: str(out))
+    st.table.selectAll()
+    from filepilot.ui.file_actions import transfer_dialog
+    transfer_dialog(st, st.selected_paths(), st._files_changed, copy=False)
+    assert sorted(p.name for p in out.iterdir()) == ["other.txt", "новое.txt"]
+    # меню: для одного файла есть переименование и «Копировать путь», для нескольких нет
+    from PySide6.QtWidgets import QMenu
+    st.table.selectRow(0)
+    from filepilot.ui.file_actions import fill_menu
+    one, many = QMenu(), QMenu()
+    fill_menu(one, st, st.selected_paths(), lambda m: None)
+    fill_menu(many, st, ["a", "b"], lambda m: None)
+    assert any("Переименовать" in a.text() for a in one.actions()) and not any("Переименовать" in a.text() for a in many.actions())
+    assert any("(2)" in a.text() for a in many.actions())
+    assert st.table.rowCount() == 2 and all(str(out) in st.table.item(r, 0).text() for r in range(2))
+    # удаление нескольких выбранных
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.StandardButton.Yes)
+    st.table.selectAll()
+    st.trash_selected()
+    assert list(out.iterdir()) == [] and st.table.rowCount() == 0
+    w.close()

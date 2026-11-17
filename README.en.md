@@ -13,6 +13,7 @@ Everything runs on your computer and the index is stored locally. Open source, M
 
 - **Full-text search** (txt, code, pdf, docx, xlsx, pptx, odt and more): filters by extension, size and age, operators right in the query (`ext:pdf bigger:5mb`), query history, a preview of the found text with highlighting, saved searches, CSV export.
 - **Duplicates**: compared by content, list export to CSV. Choose which copy to keep (oldest, newest, shortest path). Files only go to the Recycle Bin, and at least one copy always stays in every group.
+- **File actions**: right-click or Delete on a found file and in "Largest files": move to the Recycle Bin (with confirmation), move, copy, rename.
 - **Disk map**: largest files, folders and file types, with a donut chart and CSV export of the table.
 - **Auto-sorting rules**: move, archive to zip or send to the Recycle Bin by folder, extension, name pattern and file age. "Dry run" shows the result before you apply it. There is no permanent delete.
 - **Tray and hotkey** ("Window" menu, off by default): closing hides the window in the tray, Ctrl+Alt+F opens the search from any program.

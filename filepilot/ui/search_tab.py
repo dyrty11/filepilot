@@ -5,7 +5,7 @@ import html
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, QStringListModel, Qt, QTimer
-from PySide6.QtGui import QAbstractTextDocumentLayout, QGuiApplication, QTextDocument
+from PySide6.QtGui import QAbstractTextDocumentLayout, QAction, QGuiApplication, QKeySequence, QShortcut, QTextDocument
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QCompleter, QCheckBox, QComboBox, QFileDialog, QGroupBox, QInputDialog, QMessageBox, QSplitter, QTextBrowser, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMenu,
     QPushButton, QSpinBox, QStyle, QStyledItemDelegate, QStyleOptionViewItem, QTableWidget, QTableWidgetItem,
@@ -16,6 +16,7 @@ from ..i18n import tr
 from ..config import format_time, human_size
 from ..search import HL_END, HL_START, Filters, export_csv, get_content, mark_matches, merge_filters, parse_exts, parse_operators, search
 from ..settings import save_settings
+from .file_actions import fill_menu, trash_dialog
 from .theme import HIGHLIGHT, open_path, reveal_in_folder
 
 
@@ -135,6 +136,7 @@ class SearchTab(QWidget):
         split.setStretchFactor(1, 2)
         lay.addWidget(split, 1)
         self._results: list[dict] = []
+        QShortcut(QKeySequence(Qt.Key.Key_Delete), self.table, self.trash_selected, context=Qt.ShortcutContext.WidgetShortcut)
         self._sort: tuple[int, bool] | None = None  # (колонка, по возрастанию); None — по релевантности
         self.table.horizontalHeader().setSectionsClickable(True)
         self.table.horizontalHeader().sectionClicked.connect(self._header_clicked)
@@ -261,14 +263,25 @@ class SearchTab(QWidget):
             self.info.setText(tr("Файл не найден: возможно, он удалён. Нажмите «Индексировать»."))
 
     def _menu(self, pos) -> None:
-        p = self.selected_path()
-        if not p:
+        paths = self.selected_paths()
+        if not paths:
             return
         m = QMenu(self)
-        m.addAction(tr("Открыть"), self.open_selected)
-        m.addAction(tr("Показать в папке"), lambda: reveal_in_folder(p))
-        m.addAction(tr("Копировать путь"), lambda: QGuiApplication.clipboard().setText(p))
+        fill_menu(m, self, paths, self._files_changed)
+        if len(paths) == 1:
+            m.insertAction(m.actions()[2], QAction(tr("Копировать путь"), m, triggered=lambda: QGuiApplication.clipboard().setText(paths[0])))
         m.exec(self.table.viewport().mapToGlobal(pos))
+
+    def selected_paths(self) -> list[str]:
+        return [self.table.item(i.row(), 0).text() for i in self.table.selectionModel().selectedRows()]
+
+    def _files_changed(self, message: str) -> None:
+        """После действия с файлами: перечитываем результаты и показываем итог."""
+        self.run_search()
+        self.info.setText(message)
+
+    def trash_selected(self) -> None:
+        trash_dialog(self, self.selected_paths(), self._files_changed)
 
     # --- предпросмотр -------------------------------------------------------
     def update_preview(self) -> None:

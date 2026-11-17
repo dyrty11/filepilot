@@ -6,6 +6,7 @@ Full history in Russian: [CHANGELOG.md](CHANGELOG.md).
 - Tray icon: the "Window" menu → "Minimize to tray on close". The close button hides the window while indexing and the background refresh keep running. Click the icon to open the window; right-click gives "Open and search", "Index" and "Quit".
 - Hotkey Ctrl+Alt+F (Windows, turned on in the "Window" menu): shows the FilePilot window and puts the cursor in the search box from any program. If another program already uses the combination, FilePilot tells you.
 - Both features are off by default.
+- File actions: right-click (or Delete) on a found file and in the "Largest files" list of the disk map. "Move to Recycle Bin" with confirmation (always the bin, never permanent), "Move to folder", "Copy to folder", "Rename". You can select several files at once. The index updates right away: a renamed or moved file is found at its new path without re-indexing.
 
 ## 0.8.0
 - The `newer:7` operator in the search box: only files changed in the last 7 days (the counterpart of `older:`).

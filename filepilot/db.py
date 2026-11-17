@@ -1,6 +1,7 @@
 """SQLite + FTS5. Соединение на каждый поток: индексатор работает в фоне, интерфейс читает параллельно."""
 from __future__ import annotations
 
+import os
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -84,6 +85,14 @@ def forget(paths: list[str]) -> None:
         return
     with transaction() as c:
         c.executemany("DELETE FROM files WHERE path = ?", [(p,) for p in paths])
+
+
+def rename_path(old: str, new: str) -> None:
+    """Файл переименован или перенесён: правим запись в индексе (поиск по содержимому продолжает его находить)."""
+    name = os.path.basename(new)
+    with transaction() as c:
+        c.execute("DELETE FROM files WHERE path = ?", (new,))  # на случай устаревшей записи на новом месте
+        c.execute("UPDATE files SET path = ?, name = ?, ext = ? WHERE path = ?", (new, name, os.path.splitext(name)[1].lower(), old))
 
 
 def clear_index() -> int:

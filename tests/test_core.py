@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from filepilot import db, diskmap, duplicates, indexer, rules, search
+from filepilot import db, diskmap, duplicates, fileops, indexer, rules, search
 from filepilot.extractors import decode_bytes, extract_text
 from filepilot.settings import Settings, load_settings, save_settings
 
@@ -438,3 +438,54 @@ def test_tray_and_hotkey_settings_roundtrip():
     from filepilot.config import settings_path
     settings_path().write_text('{"tray": "да", "hotkey": null}', encoding="utf-8")
     assert load_settings().hotkey is False
+
+
+def _indexed(tmp_path):
+    root = tmp_path / "root"
+    make_tree(root)
+    indexer.index_folders([str(root)])
+    return root
+
+
+def test_fileops_trash_removes_file_and_index_entry(tmp_path, monkeypatch):
+    root = _indexed(tmp_path)
+    monkeypatch.setattr(fileops, "send2trash", lambda p: os.remove(p))
+    big = str(root / "big.bin")
+    gone = str(root / "a.txt")
+    os.remove(gone)  # исчез с диска до удаления: просто уходит из индекса
+    done, errors = fileops.trash([big, gone, str(root / "docs")])
+    assert done == [big, gone] and len(errors) == 1 and "папка" in errors[0][1]  # папки не трогаем
+    assert not os.path.exists(big)
+    assert not [r for r in diskmap.top_files(50) if r["path"] in (big, gone)]
+    assert (root / "docs").is_dir()
+
+
+def test_fileops_move_copy_and_name_clash(tmp_path):
+    root = _indexed(tmp_path)
+    dest = tmp_path / "out"; dest.mkdir()
+    (dest / "a.txt").write_text("занято", encoding="utf-8")  # такое имя уже есть
+    done, errors = fileops.move([str(root / "a.txt")], str(dest))
+    assert not errors and Path(done[0][1]).name == "a (1).txt" and (dest / "a (1).txt").read_text(encoding="utf-8") == "hello world"
+    assert not (root / "a.txt").exists()
+    # поиск находит файл уже по новому пути, без повторной индексации
+    paths = {r["path"] for r in search.search("hello")}
+    assert str(dest / "a (1).txt") in paths and str(root / "a.txt") not in paths
+    # копирование не трогает оригинал
+    done, errors = fileops.copy([str(root / "b.txt")], str(dest))
+    assert not errors and (root / "b.txt").exists() and (dest / "b.txt").exists()
+    # ошибки: нет папки / нет файла
+    assert fileops.move([str(root / "b.txt")], str(tmp_path / "нет"))[1]
+    assert fileops.copy([str(root / "нет.txt")], str(dest))[1]
+
+
+def test_fileops_rename(tmp_path):
+    root = _indexed(tmp_path)
+    new = fileops.rename(str(root / "a.txt"), "привет.txt")
+    assert Path(new).name == "привет.txt" and not (root / "a.txt").exists()
+    assert {r["path"] for r in search.search("name:привет")} == {new}
+    for bad in ("", "a/b.txt", "con.txt", "x.txt ", "b.txt", "что?.txt"):
+        with pytest.raises(ValueError):
+            fileops.rename(new, bad)
+    assert fileops.rename(new, "привет.txt") == new  # то же имя: ничего не делаем
+    with pytest.raises(ValueError):
+        fileops.rename(str(root / "нет.txt"), "x.txt")
