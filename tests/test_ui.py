@@ -377,6 +377,7 @@ def test_search_tab_file_actions(app, tmp_path, monkeypatch):
     # переименование через диалог
     st.table.selectRow(0)
     target = st.selected_paths()[0]
+    other = ({"small.txt", "other.txt"} - {os.path.basename(target)}).pop()  # порядок строк зависит от системы
     monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("новое.txt", True))
     from filepilot.ui.file_actions import rename_dialog
     rename_dialog(st, target, st._files_changed)
@@ -387,7 +388,7 @@ def test_search_tab_file_actions(app, tmp_path, monkeypatch):
     st.table.selectAll()
     from filepilot.ui.file_actions import transfer_dialog
     transfer_dialog(st, st.selected_paths(), st._files_changed, copy=False)
-    assert sorted(p.name for p in out.iterdir()) == ["other.txt", "новое.txt"]
+    assert sorted(p.name for p in out.iterdir()) == sorted([other, "новое.txt"])
     # меню: для одного файла есть переименование и «Копировать путь», для нескольких нет
     from PySide6.QtWidgets import QMenu
     st.table.selectRow(0)
