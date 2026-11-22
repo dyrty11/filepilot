@@ -61,6 +61,7 @@ def test_full_flow(app, tmp_path):
     w.search_tab.query.setText("")
     w.search_tab.load_saved()
     assert w.search_tab.query.text() == "договор" and w.search_tab.ext.text() == "txt"
+    w.dupes_tab.min_kb.setValue(0)  # в тестах файлы крошечные
     w.dupes_tab.start()
     assert wait_until(lambda: w.dupes_tab._task is None)
     assert w.dupes_tab.tree.topLevelItemCount() == 1
@@ -210,6 +211,7 @@ def test_operators_history_and_csv_export(app, tmp_path, monkeypatch):
     st.remember_query()
     assert load_settings().history == ["договор ext:log"]
     # CSV дубликатов
+    w.dupes_tab.min_kb.setValue(0)  # в тестах файлы крошечные
     w.dupes_tab.start()
     assert wait_until(lambda: w.dupes_tab._task is None)
     out = tmp_path / "d.csv"
@@ -463,3 +465,34 @@ def test_hotkey_busy_combination_reports_false(app, monkeypatch):
     monkeypatch.setattr(ctypes, "windll", types.SimpleNamespace(user32=user32, kernel32=types.SimpleNamespace(GetCurrentThreadId=Fn(lambda: 1))), raising=False)
     hk = hotkey.GlobalHotkey(lambda: None)
     assert hk.register() is False and not hk.active
+
+
+def test_duplicates_tab_skips_tiny_files_by_default(app, tmp_path):
+    from filepilot import indexer
+    from filepilot.ui.duplicates_tab import DuplicatesTab
+    root = tmp_path / "r"; root.mkdir()
+    (root / "addons.json").write_text("{}", encoding="utf-8")   # 2 байта, как у Firefox weave
+    (root / "forms.json").write_text("{}", encoding="utf-8")
+    (root / "a.dat").write_bytes(b"z" * 4096)
+    (root / "b.dat").write_bytes(b"z" * 4096)
+    indexer.index_folders([str(root)])
+    tab = DuplicatesTab()
+    tab.start()
+    wait_until(lambda: tab._task is None)
+    assert len(tab.groups) == 1 and tab.groups[0]["size"] == 4096
+    tab.min_kb.setValue(0)
+    tab.start()
+    wait_until(lambda: tab._task is None)
+    assert len(tab.groups) == 2
+
+
+def test_hotkey_switch_turns_on_tray(app, monkeypatch):
+    """Включённая клавиша должна переживать закрытие окна: вместе с ней включается трей."""
+    from filepilot import settings as st
+    from filepilot.ui import main_window as mw
+    w = MainWindow()
+    if w.tray is None:
+        pytest.skip("в этом окружении нет системного трея")
+    monkeypatch.setattr(w._hotkey, "register", lambda: True)
+    w._toggle_hotkey(True)
+    assert w.settings.hotkey and w.settings.tray and w.act_tray.isChecked()

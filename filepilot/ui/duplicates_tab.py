@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QHBoxLayout, QSpinBox, QLabel, QMessageBox, QProgressBar, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ..i18n import tr
@@ -11,6 +11,9 @@ from .. import duplicates
 from ..config import human_size
 from ..i18n import plural
 from .workers import Task
+
+
+DEFAULT_MIN_KB = 1  # меньше килобайта: пустые JSON «{}», заглушки и прочая мелочь, а не настоящие копии
 
 
 class DuplicatesTab(QWidget):
@@ -30,12 +33,19 @@ class DuplicatesTab(QWidget):
         self.same_ext = QCheckBox(tr("Только с одинаковым расширением"))
         self.same_ext.setChecked(True)
         self.same_ext.setToolTip(tr("Файлы с одинаковым содержимым, но разным расширением (например test.exe и test.bat) не считаются дубликатами."))
+        self.min_kb = QSpinBox()
+        self.min_kb.setRange(0, 10_000_000)
+        self.min_kb.setValue(DEFAULT_MIN_KB)
+        self.min_kb.setSuffix(tr(" КБ"))
+        self.min_kb.setToolTip(tr("Файлы меньше этого размера не проверяются: крошечные файлы вроде «{}» почти всегда одинаковы и копиями не являются."))
         self.btn_mark = QPushButton(tr("Отметить остальные"))
         self.btn_unmark = QPushButton(tr("Снять отметки"))
         self.btn_trash = QPushButton(tr("Удалить отмеченные в корзину"))
         self.btn_csv = QPushButton(tr("Экспорт в CSV"))
         for b in (self.btn_find, self.btn_cancel):
             row.addWidget(b)
+        row.addWidget(QLabel(tr("Не меньше:")))
+        row.addWidget(self.min_kb)
         row.addWidget(self.same_ext)
         row.addWidget(QLabel(tr("Оставить:")))
         row.addWidget(self.keep)
@@ -81,9 +91,11 @@ class DuplicatesTab(QWidget):
         self.info.setText(tr("Ищу дубликаты…"))
 
         same_ext = self.same_ext.isChecked()
+        min_size = self.min_kb.value() * 1024
+        self._min_kb_used = self.min_kb.value()
 
         def job(progress, cancel):
-            return duplicates.find_duplicates(on_progress=lambda i, n: progress(i, n, ""), should_cancel=cancel, same_ext=same_ext)
+            return duplicates.find_duplicates(on_progress=lambda i, n: progress(i, n, ""), should_cancel=cancel, same_ext=same_ext, min_size=min_size)
 
         self._task = Task(job, self)
         self._task.progress.connect(lambda i, n, _: (self.bar.setRange(0, max(n, 1)), self.bar.setValue(i)))
@@ -114,7 +126,10 @@ class DuplicatesTab(QWidget):
                 ch.setCheckState(0, Qt.CheckState.Unchecked)
                 top.addChild(ch)
             top.setExpanded(True)
-        self.info.setText(tr('Групп дубликатов: {0}. Можно освободить: {1}.').format(len(groups), human_size(saved)) if groups else tr("Дубликатов нет."))
+        text = tr('Групп дубликатов: {0}. Можно освободить: {1}.').format(len(groups), human_size(saved)) if groups else tr("Дубликатов нет.")
+        if getattr(self, "_min_kb_used", 0):
+            text += " " + tr("Файлы меньше {0} КБ не проверялись.").format(self._min_kb_used)
+        self.info.setText(text)
 
     def _children(self):
         for i in range(self.tree.topLevelItemCount()):

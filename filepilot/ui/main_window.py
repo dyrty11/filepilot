@@ -425,13 +425,27 @@ class MainWindow(QMainWindow):
         btn.setMenu(menu)
         tb.addWidget(btn)
         if self.settings.hotkey and GlobalHotkey.supported():
-            self.act_hotkey.setChecked(self._hotkey.register())
+            ok = self._hotkey.register()
+            self.act_hotkey.setChecked(ok)
+            if ok:
+                self._ensure_background()
+            else:
+                self.settings.hotkey = False
+                save_settings(self.settings)
+                self.status.setText(tr("Горячая клавиша не включилась: сочетание занято (код {0}). Возможно, уже запущена другая копия FilePilot.").format(self._hotkey.error))
 
     def _apply_tray(self, on: bool) -> None:
         if self.tray is not None:
             self.tray.setVisible(on)
         # со значком в трее закрытое окно не должно завершать программу
         QApplication.setQuitOnLastWindowClosed(not on)
+
+    def _ensure_background(self) -> None:
+        """Горячая клавиша работает, пока программа запущена. Закрытие окна без трея завершило бы её,
+        поэтому вместе с клавишей включаем сворачивание в трей."""
+        if self.tray is not None and not self.act_tray.isChecked():
+            self.act_tray.setChecked(True)
+            self._toggle_tray(True)
 
     def _toggle_tray(self, on: bool) -> None:
         self.settings.tray = bool(on)
@@ -443,8 +457,10 @@ class MainWindow(QMainWindow):
             ok = self._hotkey.register()
             self.act_hotkey.setChecked(ok)
             self.settings.hotkey = ok
-            if not ok:
-                QMessageBox.warning(self, "FilePilot", tr("Не удалось занять сочетание клавиш: возможно, его уже использует другая программа."))
+            if ok:
+                self._ensure_background()
+            else:
+                QMessageBox.warning(self, "FilePilot", tr("Не удалось занять сочетание клавиш: возможно, его уже использует другая программа.") + f" ({self._hotkey.error})")
         else:
             self._hotkey.unregister()
             self.settings.hotkey = False

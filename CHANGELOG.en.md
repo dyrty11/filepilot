@@ -2,6 +2,10 @@
 
 Full history in Russian: [CHANGELOG.md](CHANGELOG.md).
 
+## 0.10.1
+- Duplicates: files smaller than 1 KB are no longer checked by default. Tiny files such as Firefox's empty `{}` are almost always identical without being real copies. Change the limit in the "At least" box (0 includes everything); on the command line it is `--min-kb`.
+- Hotkey Ctrl+Alt+F: turning it on now also turns on running in the tray; before, closing the window quit the program and the key stopped working. If the combination is taken, the status bar shows the error code.
+
 ## 0.10.0
 - New Rust core: folder scanning, text extraction (txt, code, docx, xlsx, pptx, odt) and the file comparison behind duplicate search run in parallel on all CPU cores. If the core fails to load, FilePilot falls back to the previous code, just slower.
 - Duplicates: only files with the same extension are compared by default. Before, `test.exe` and `test.bat` with identical content ended up in one group, and deleting such "copies" is unsafe. Untick "Same extension only" to widen the search; on the command line use `filepilot dupes --any-ext`.

@@ -47,6 +47,7 @@ class GlobalHotkey(QObject):
         self.active = False
         self._thread: threading.Thread | None = None
         self._tid = 0
+        self.error = 0  # код ошибки Windows, если сочетание не удалось занять (1409: занято другой программой)
 
     @staticmethod
     def supported() -> bool:
@@ -72,6 +73,8 @@ class GlobalHotkey(QObject):
         u.PeekMessageW(ctypes.byref(msg), None, 0x0400, 0x0400, 0)  # создаём очередь сообщений потока
         self._tid = int(k.GetCurrentThreadId())
         ok = bool(u.RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, ord("F")))
+        if not ok:
+            self.error = int(getattr(ctypes, "GetLastError", lambda: 0)())
         result.append(ok)
         ready.set()
         if not ok:
