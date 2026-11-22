@@ -365,8 +365,9 @@ def test_cloud_placeholder_is_not_read(tmp_path, monkeypatch):
     f = tmp_path / "cloud.txt"
     f.write_text("секретный текст", encoding="utf-8")
     st = f.stat()
+    monkeypatch.setattr(indexer.native, "available", lambda: False)  # обход подменяем: идём по Python-пути
     monkeypatch.setattr(indexer, "scan", lambda root, exclude=(): iter([(str(f), "cloud.txt", st.st_size, st.st_mtime, st.st_ctime, True)]))
-    monkeypatch.setattr(indexer, "extract_text", lambda p: pytest.fail("заглушку облака читать нельзя"))
+    monkeypatch.setattr(indexer, "extract_many", lambda paths: pytest.fail("заглушку облака читать нельзя") if paths else [])
     indexer.index_folders([str(tmp_path)])
     row = db.get_db().execute("SELECT content FROM files WHERE name='cloud.txt'").fetchone()
     assert row["content"] is None

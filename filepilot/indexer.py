@@ -12,7 +12,8 @@ from .config import (
     ATTR_OFFLINE_MASK, DRIVE_ROOT_SKIP, IGNORED_DIRS, MAX_CONTENT_FILE_BYTES, NOISY_DIRS,
 )
 from .db import get_db
-from .extractors import extract_text
+from . import native
+from .extractors import extract_many
 
 ProgressCb = Callable[[int, int, str], None]
 CancelCb = Callable[[], bool]
@@ -110,6 +111,38 @@ def _under(path: str, roots: list[str]) -> bool:
     return any(path == r or path.startswith(r.rstrip("\\/") + os.sep) for r in roots)
 
 
+def _python_batches(root: str, exclude: Iterable[str], size: int = 500):
+    batch: list = []
+    for item in scan(root, exclude):
+        batch.append(item)
+        if len(batch) >= size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+
+class _NativeBatches:
+    """Параллельный обход в Rust: пачки приходят по мере чтения диска."""
+
+    def __init__(self, root: str, exclude: Iterable[str]) -> None:
+        patterns = [e for e in exclude if e]
+        paths = [os.path.normcase(os.path.normpath(e)) for e in patterns if _is_path_pattern(e)]
+        names = [e for e in patterns if not _is_path_pattern(e)]
+        self.scanner = native.module().Scanner(
+            root, paths, names, sorted(IGNORED_DIRS), sorted(NOISY_DIRS), sorted(DRIVE_ROOT_SKIP), sys.platform == "win32")
+
+    def __iter__(self):
+        while True:
+            batch = self.scanner.next_batch(2000, 100)
+            if batch is None:
+                return
+            yield batch  # пустая пачка = пауза в обходе: даём вызывающему проверить отмену
+
+    def cancel(self) -> None:
+        self.scanner.cancel()
+
+
 def index_folders(
     folders: list[str],
     on_progress: ProgressCb | None = None,
@@ -127,46 +160,54 @@ def index_folders(
     seen: set[str] = set()
     cancelled = False
     now = time.time()
-    pending = 0
     count = 0
     last_emit = 0.0
+    use_native = native.available()
+    upsert = """
+        INSERT INTO files(path, name, ext, size, mtime, ctime, content, indexed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(path) DO UPDATE SET name=excluded.name, ext=excluded.ext, size=excluded.size,
+            mtime=excluded.mtime, ctime=excluded.ctime, content=excluded.content, indexed_at=excluded.indexed_at
+        """
 
     for root in roots:
-        for sp, name, size, mtime, ctime, cloud in scan(root, exclude):
+        batches = _NativeBatches(root, exclude) if use_native else _python_batches(root, exclude)
+        for items in batches:
             if should_cancel and should_cancel():
                 cancelled = True
+                if use_native:
+                    batches.cancel()
                 break
-            count += 1
-            if on_progress:
+            todo = []
+            for it in items:
+                sp, size, mtime = it[0], it[2], it[3]
+                count += 1
+                seen.add(sp)
+                old = known.get(sp)
+                if old is not None and old[0] == size and abs(old[1] - mtime) <= 1.0:
+                    skipped += 1
+                else:
+                    todo.append((it, old is None))
+            if on_progress and items:
                 t_now = time.monotonic()
                 if t_now - last_emit >= 0.1:  # не заваливаем интерфейс миллионами сигналов
                     last_emit = t_now
-                    on_progress(count, max(estimate, count) if estimate else 0, sp)
-            seen.add(sp)
-            old = known.get(sp)
-            if old is not None and old[0] == size and abs(old[1] - mtime) <= 1.0:
-                skipped += 1
+                    on_progress(count, max(estimate, count) if estimate else 0, items[-1][0])
+            if not todo:
                 continue
-            content = None
-            if not cloud and size <= MAX_CONTENT_FILE_BYTES:  # заглушки облака не читаем: это запустило бы скачивание
-                content = extract_text(Path(sp))
-            conn.execute(
-                """
-                INSERT INTO files(path, name, ext, size, mtime, ctime, content, indexed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(path) DO UPDATE SET name=excluded.name, ext=excluded.ext, size=excluded.size,
-                    mtime=excluded.mtime, ctime=excluded.ctime, content=excluded.content, indexed_at=excluded.indexed_at
-                """,
-                (sp, name, os.path.splitext(name)[1].lower(), size, mtime, ctime, content, now),
-            )
-            if old is None:
-                added += 1
-            else:
-                updated += 1
-            pending += 1
-            if pending >= batch:
-                conn.commit()
-                pending = 0
+            # заглушки облака не читаем: это запустило бы скачивание
+            readable = [i for i, ((_, _, size, _, _, cloud), _) in enumerate(todo) if not cloud and size <= MAX_CONTENT_FILE_BYTES]
+            texts = extract_many([todo[i][0][0] for i in readable])
+            content = dict(zip(readable, texts))
+            rows = []
+            for i, ((sp, name, size, mtime, ctime, _cloud), is_new) in enumerate(todo):
+                rows.append((sp, name, os.path.splitext(name)[1].lower(), size, mtime, ctime, content.get(i), now))
+                if is_new:
+                    added += 1
+                else:
+                    updated += 1
+            conn.executemany(upsert, rows)
+            conn.commit()
         if cancelled:
             break
     total = count

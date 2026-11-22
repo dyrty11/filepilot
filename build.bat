@@ -7,7 +7,9 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt pyinstaller pytest
 if errorlevel 1 goto :err
 
-echo === 2/5  Тесты ===
+echo === 2/5  Rust-ядро и тесты ===
+python scripts\build_native.py
+if errorlevel 1 goto :err
 set QT_QPA_PLATFORM=offscreen
 python -m pytest -q
 if errorlevel 1 goto :err

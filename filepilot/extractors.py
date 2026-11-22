@@ -115,4 +115,18 @@ def _read_zip_xml(path: Path, ext: str) -> str:
     return "\n".join(parts)[:MAX_CONTENT_CHARS]
 
 
-__all__ = ["extract_text", "decode_bytes", "read_text_file", "MAX_CONTENT_FILE_BYTES"]
+def extract_many(paths: list[str]) -> list[str | None]:
+    """Текст сразу из многих файлов. С Rust-ядром текстовые файлы и офисные форматы читаются параллельно,
+    PDF и всё, чего ядро не умеет, по-прежнему разбирает Python."""
+    from . import native
+    nat = native.module()
+    if nat is None:
+        return [extract_text(Path(p)) for p in paths]
+    out = nat.extract_many(paths, MAX_CONTENT_CHARS, MAX_ZIP_MEMBER_BYTES, sorted(TEXT_EXTS))
+    for i, p in enumerate(paths):
+        if out[i] is None and p.lower().endswith(".pdf"):
+            out[i] = extract_text(Path(p))
+    return out
+
+
+__all__ = ["extract_text", "extract_many", "decode_bytes", "read_text_file", "MAX_CONTENT_FILE_BYTES"]

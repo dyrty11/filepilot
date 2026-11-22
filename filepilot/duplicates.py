@@ -9,6 +9,7 @@ from typing import Callable
 
 from send2trash import send2trash
 
+from . import native
 from .db import forget, get_db
 
 CHUNK = 1 << 20
@@ -30,9 +31,57 @@ def _hash(path: str, full: bool) -> str | None:
     return h.hexdigest()
 
 
+def _find_native(min_size: int, on_progress: ProgressCb | None, should_cancel: CancelCb | None) -> list[dict]:
+    """То же, что `find_duplicates`, но хеши считает Rust-ядро: параллельно по всем ядрам процессора."""
+    nat = native.module()
+    conn = get_db()
+    by_size: dict[int, list[str]] = defaultdict(list)
+    for r in conn.execute(
+        "SELECT size, path FROM files WHERE size IN (SELECT size FROM files WHERE size >= ? GROUP BY size HAVING COUNT(*) > 1)",
+        (max(min_size, 1),),
+    ):
+        by_size[r["size"]].append(r["path"])
+    sizes = list(by_size)
+    result: list[dict] = []
+    done = 0
+    i = 0
+    while i < len(sizes):
+        if should_cancel and should_cancel():
+            break
+        # пачка размеров примерно на 2000 файлов: хватает для загрузки всех ядер, а отмена и прогресс остаются живыми
+        chunk: list[int] = []
+        n = 0
+        while i < len(sizes) and (not chunk or n < 2000):
+            chunk.append(sizes[i])
+            n += len(by_size[sizes[i]])
+            i += 1
+        flat = [(sz, p) for sz in chunk for p in by_size[sz]]
+        partial = nat.hash_many([p for _, p in flat], False)
+        groups: dict[tuple[int, str], list[str]] = defaultdict(list)
+        for (sz, p), h in zip(flat, partial):
+            if h:
+                groups[(sz, h)].append(p)
+        cand = [(k[0], p) for k, v in groups.items() if len(v) > 1 for p in v]
+        full = nat.hash_many([p for _, p in cand], True)
+        final: dict[tuple[int, str], list[str]] = defaultdict(list)
+        for (sz, p), h in zip(cand, full):
+            if h:
+                final[(sz, h)].append(p)
+        for (sz, h), lst in final.items():
+            if len(lst) > 1:
+                result.append({"hash": h, "size": sz, "files": sorted(lst)})
+        done += len(chunk)
+        if on_progress:
+            on_progress(done, len(sizes))
+    result.sort(key=lambda g: g["size"] * (len(g["files"]) - 1), reverse=True)
+    return result
+
+
 def find_duplicates(min_size: int = 1, on_progress: ProgressCb | None = None,
                     should_cancel: CancelCb | None = None) -> list[dict]:
     """Группы вида {'hash','size','files':[...]}, отсортированы по возможной экономии места."""
+    if native.available():
+        return _find_native(min_size, on_progress, should_cancel)
     conn = get_db()
     sizes = conn.execute(
         "SELECT size FROM files WHERE size >= ? GROUP BY size HAVING COUNT(*) > 1", (max(min_size, 1),)

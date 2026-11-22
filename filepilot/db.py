@@ -54,6 +54,8 @@ def get_db() -> sqlite3.Connection:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA cache_size=-65536")  # 64 МБ кэша страниц: заметно ускоряет запись индекса
+        conn.execute("PRAGMA temp_store=MEMORY")
         conn.executescript(SCHEMA)
         conn.commit()
         _local.conn, _local.path = conn, path
