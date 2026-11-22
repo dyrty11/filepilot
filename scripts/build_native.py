@@ -12,6 +12,9 @@ CRATE = ROOT / "native"
 
 
 def main() -> int:
+    for stream in (sys.stdout, sys.stderr):  # консоль Windows бывает не в UTF-8: кириллица не должна ронять сборку
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     subprocess.run(["cargo", "build", "--release", "--manifest-path", str(CRATE / "Cargo.toml")], check=True)
     rel = CRATE / "target" / "release"
     if sys.platform == "win32":
