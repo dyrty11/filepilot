@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QHBoxLayout, QLabel, QMessageBox, QProgressBar, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ..i18n import tr
@@ -27,12 +27,16 @@ class DuplicatesTab(QWidget):
         self.keep = QComboBox()
         for key, label in (("first", tr("Первую в списке")), ("oldest", tr("Самую старую")), ("newest", tr("Самую новую")), ("shortest", tr("С самым коротким путём"))):
             self.keep.addItem(label, key)
+        self.same_ext = QCheckBox(tr("Только с одинаковым расширением"))
+        self.same_ext.setChecked(True)
+        self.same_ext.setToolTip(tr("Файлы с одинаковым содержимым, но разным расширением (например test.exe и test.bat) не считаются дубликатами."))
         self.btn_mark = QPushButton(tr("Отметить остальные"))
         self.btn_unmark = QPushButton(tr("Снять отметки"))
         self.btn_trash = QPushButton(tr("Удалить отмеченные в корзину"))
         self.btn_csv = QPushButton(tr("Экспорт в CSV"))
         for b in (self.btn_find, self.btn_cancel):
             row.addWidget(b)
+        row.addWidget(self.same_ext)
         row.addWidget(QLabel(tr("Оставить:")))
         row.addWidget(self.keep)
         row.addWidget(self.btn_mark)
@@ -76,8 +80,10 @@ class DuplicatesTab(QWidget):
         self.bar.setRange(0, 0)
         self.info.setText(tr("Ищу дубликаты…"))
 
+        same_ext = self.same_ext.isChecked()
+
         def job(progress, cancel):
-            return duplicates.find_duplicates(on_progress=lambda i, n: progress(i, n, ""), should_cancel=cancel)
+            return duplicates.find_duplicates(on_progress=lambda i, n: progress(i, n, ""), should_cancel=cancel, same_ext=same_ext)
 
         self._task = Task(job, self)
         self._task.progress.connect(lambda i, n, _: (self.bar.setRange(0, max(n, 1)), self.bar.setValue(i)))

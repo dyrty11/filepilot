@@ -2,6 +2,12 @@
 
 Full history in Russian: [CHANGELOG.md](CHANGELOG.md).
 
+## 0.10.0
+- New Rust core: folder scanning, text extraction (txt, code, docx, xlsx, pptx, odt) and the file comparison behind duplicate search run in parallel on all CPU cores. If the core fails to load, FilePilot falls back to the previous code, just slower.
+- Duplicates: only files with the same extension are compared by default. Before, `test.exe` and `test.bat` with identical content ended up in one group, and deleting such "copies" is unsafe. Untick "Same extension only" to widen the search; on the command line use `filepilot dupes --any-ext`.
+- Hotkey Ctrl+Alt+F rewritten: a dedicated thread now listens for it and the window is forced to the foreground. Before, the key press might never reach the window.
+- Faster index writing: bigger cache and larger batches.
+
 ## 0.9.0
 - Tray icon: the "Window" menu → "Minimize to tray on close". The close button hides the window while indexing and the background refresh keep running. Click the icon to open the window; right-click gives "Open and search", "Index" and "Quit".
 - Hotkey Ctrl+Alt+F (Windows, turned on in the "Window" menu): shows the FilePilot window and puts the cursor in the search box from any program. If another program already uses the combination, FilePilot tells you.

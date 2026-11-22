@@ -405,3 +405,61 @@ def test_search_tab_file_actions(app, tmp_path, monkeypatch):
     st.trash_selected()
     assert list(out.iterdir()) == [] and st.table.rowCount() == 0
     w.close()
+
+
+def test_hotkey_thread_delivers_press_to_callback(app, monkeypatch):
+    """Подделываем user32: поток регистрирует сочетание, получает WM_HOTKEY и будит окно через сигнал Qt."""
+    import ctypes
+    import threading
+    import types
+    from ctypes import wintypes
+    from filepilot import hotkey
+
+    stop = threading.Event()
+    calls = {"registered": 0, "unregistered": 0, "msgs": 0}
+
+    def get_message(msg_ptr, *_):
+        calls["msgs"] += 1
+        if calls["msgs"] == 1:
+            m = ctypes.cast(msg_ptr, ctypes.POINTER(wintypes.MSG)).contents
+            m.message, m.wParam = hotkey.WM_HOTKEY, hotkey.HOTKEY_ID
+            return 1
+        stop.wait(5)
+        return 0  # WM_QUIT
+
+    class Fn:
+        def __init__(self, f): self.f, self.argtypes, self.restype = f, None, None
+        def __call__(self, *a): return self.f(*a)
+
+    user32 = types.SimpleNamespace(
+        RegisterHotKey=Fn(lambda *a: calls.__setitem__("registered", calls["registered"] + 1) or 1),
+        UnregisterHotKey=Fn(lambda *a: calls.__setitem__("unregistered", calls["unregistered"] + 1) or 1),
+        GetMessageW=Fn(get_message), PeekMessageW=Fn(lambda *a: 0),
+        PostThreadMessageW=Fn(lambda *a: stop.set() or 1))
+    kernel32 = types.SimpleNamespace(GetCurrentThreadId=Fn(lambda: 1234))
+    monkeypatch.setattr(hotkey.sys, "platform", "win32")
+    monkeypatch.setattr(ctypes, "windll", types.SimpleNamespace(user32=user32, kernel32=kernel32), raising=False)
+
+    pressed = []
+    hk = hotkey.GlobalHotkey(lambda: pressed.append(1))
+    assert hk.register() and hk.active and calls["registered"] == 1
+    wait_until(lambda: pressed)
+    assert pressed == [1]
+    hk.unregister()
+    assert not hk.active and calls["unregistered"] == 1
+
+
+def test_hotkey_busy_combination_reports_false(app, monkeypatch):
+    import ctypes
+    import types
+    from filepilot import hotkey
+
+    class Fn:
+        def __init__(self, f): self.f, self.argtypes, self.restype = f, None, None
+        def __call__(self, *a): return self.f(*a)
+
+    user32 = types.SimpleNamespace(RegisterHotKey=Fn(lambda *a: 0), PeekMessageW=Fn(lambda *a: 0), GetMessageW=Fn(lambda *a: 0))
+    monkeypatch.setattr(hotkey.sys, "platform", "win32")
+    monkeypatch.setattr(ctypes, "windll", types.SimpleNamespace(user32=user32, kernel32=types.SimpleNamespace(GetCurrentThreadId=Fn(lambda: 1))), raising=False)
+    hk = hotkey.GlobalHotkey(lambda: None)
+    assert hk.register() is False and not hk.active

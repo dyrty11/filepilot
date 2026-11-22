@@ -31,17 +31,20 @@ def _hash(path: str, full: bool) -> str | None:
     return h.hexdigest()
 
 
-def _find_native(min_size: int, on_progress: ProgressCb | None, should_cancel: CancelCb | None) -> list[dict]:
+def _find_native(min_size: int, on_progress: ProgressCb | None, should_cancel: CancelCb | None, same_ext: bool = True) -> list[dict]:
     """То же, что `find_duplicates`, но хеши считает Rust-ядро: параллельно по всем ядрам процессора."""
     nat = native.module()
     conn = get_db()
-    by_size: dict[int, list[str]] = defaultdict(list)
+    # группа кандидатов: размер (и расширение, если не просили искать среди разных форматов)
+    by_size: dict[tuple[int, str], list[str]] = defaultdict(list)
     for r in conn.execute(
-        "SELECT size, path FROM files WHERE size IN (SELECT size FROM files WHERE size >= ? GROUP BY size HAVING COUNT(*) > 1)",
+        "SELECT size, ext, path FROM files WHERE size IN (SELECT size FROM files WHERE size >= ? GROUP BY size HAVING COUNT(*) > 1)",
         (max(min_size, 1),),
     ):
-        by_size[r["size"]].append(r["path"])
+        by_size[(r["size"], (r["ext"] or "") if same_ext else "")].append(r["path"])
+    by_size = {k: v for k, v in by_size.items() if len(v) > 1}
     sizes = list(by_size)
+    ext_of = {p: k[1] for k, ps in by_size.items() for p in ps}
     result: list[dict] = []
     done = 0
     i = 0
@@ -55,19 +58,19 @@ def _find_native(min_size: int, on_progress: ProgressCb | None, should_cancel: C
             chunk.append(sizes[i])
             n += len(by_size[sizes[i]])
             i += 1
-        flat = [(sz, p) for sz in chunk for p in by_size[sz]]
+        flat = [(sz[0], p) for sz in chunk for p in by_size[sz]]
         partial = nat.hash_many([p for _, p in flat], False)
-        groups: dict[tuple[int, str], list[str]] = defaultdict(list)
+        groups: dict[tuple[int, str, str], list[str]] = defaultdict(list)
         for (sz, p), h in zip(flat, partial):
             if h:
-                groups[(sz, h)].append(p)
+                groups[(sz, ext_of[p], h)].append(p)
         cand = [(k[0], p) for k, v in groups.items() if len(v) > 1 for p in v]
         full = nat.hash_many([p for _, p in cand], True)
-        final: dict[tuple[int, str], list[str]] = defaultdict(list)
+        final: dict[tuple[int, str, str], list[str]] = defaultdict(list)
         for (sz, p), h in zip(cand, full):
             if h:
-                final[(sz, h)].append(p)
-        for (sz, h), lst in final.items():
+                final[(sz, ext_of[p], h)].append(p)
+        for (sz, _ext, h), lst in final.items():
             if len(lst) > 1:
                 result.append({"hash": h, "size": sz, "files": sorted(lst)})
         done += len(chunk)
@@ -78,13 +81,16 @@ def _find_native(min_size: int, on_progress: ProgressCb | None, should_cancel: C
 
 
 def find_duplicates(min_size: int = 1, on_progress: ProgressCb | None = None,
-                    should_cancel: CancelCb | None = None) -> list[dict]:
-    """Группы вида {'hash','size','files':[...]}, отсортированы по возможной экономии места."""
+                    should_cancel: CancelCb | None = None, same_ext: bool = True) -> list[dict]:
+    """Группы вида {'hash','size','files':[...]}, отсортированы по возможной экономии места.
+    По умолчанию сравниваются только файлы с одинаковым расширением: test.exe и test.bat с одинаковыми
+    байтами дубликатами не считаются. same_ext=False ищет копии независимо от формата."""
     if native.available():
-        return _find_native(min_size, on_progress, should_cancel)
+        return _find_native(min_size, on_progress, should_cancel, same_ext)
     conn = get_db()
+    ecol = "ext" if same_ext else "''"
     sizes = conn.execute(
-        "SELECT size FROM files WHERE size >= ? GROUP BY size HAVING COUNT(*) > 1", (max(min_size, 1),)
+        f"SELECT size, {ecol} AS e FROM files WHERE size >= ? GROUP BY size, {ecol} HAVING COUNT(*) > 1", (max(min_size, 1),)
     ).fetchall()
     result: list[dict] = []
     for n, srow in enumerate(sizes, 1):
@@ -93,7 +99,10 @@ def find_duplicates(min_size: int = 1, on_progress: ProgressCb | None = None,
         if on_progress:
             on_progress(n, len(sizes))
         size = srow["size"]
-        paths = [r["path"] for r in conn.execute("SELECT path FROM files WHERE size = ?", (size,))]
+        if same_ext:
+            paths = [r["path"] for r in conn.execute("SELECT path FROM files WHERE size = ? AND ext IS ?", (size, srow["e"]))]
+        else:
+            paths = [r["path"] for r in conn.execute("SELECT path FROM files WHERE size = ?", (size,))]
         by_partial: dict[str, list[str]] = defaultdict(list)
         for p in paths:
             if Path(p).is_file():

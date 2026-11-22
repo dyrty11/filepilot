@@ -18,6 +18,8 @@ EN = {
     "Добавьте папки и проиндексируйте их.": "Add folders and index them.",
     "Тип": "Type",
     "Найти дубликаты": "Find duplicates",
+    "Только с одинаковым расширением": "Same extension only",
+    "Файлы с одинаковым содержимым, но разным расширением (например test.exe и test.bat) не считаются дубликатами.": "Files with identical content but a different extension (for example test.exe and test.bat) are not treated as duplicates.",
     "Отменить": "Cancel",
     "Снять отметки": "Clear selection",
     "Удалить отмеченные в корзину": "Move selected to Recycle Bin",

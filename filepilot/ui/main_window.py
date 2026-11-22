@@ -451,9 +451,11 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
 
     def show_and_search(self) -> None:
+        from ..hotkey import bring_to_front
         self.showNormal()
         self.raise_()
         self.activateWindow()
+        bring_to_front(int(self.winId()))
         self.tabs.setCurrentIndex(0)
         self.search_tab.query.setFocus()
         self.search_tab.query.selectAll()

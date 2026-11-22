@@ -490,3 +490,17 @@ def test_fileops_rename(tmp_path):
     assert fileops.rename(new, "привет.txt") == new  # то же имя: ничего не делаем
     with pytest.raises(ValueError):
         fileops.rename(str(root / "нет.txt"), "x.txt")
+
+
+def test_duplicates_ignore_other_extensions_by_default(tmp_path):
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "test.exe").write_bytes(b"echo hi\r\n")
+    (root / "test.bat").write_bytes(b"echo hi\r\n")  # те же байты, другой формат
+    (root / "copy.bat").write_bytes(b"echo hi\r\n")
+    (root / "Other.BAT").write_bytes(b"echo hi\r\n")  # расширение без учёта регистра
+    indexer.index_folders([str(root)])
+    groups = duplicates.find_duplicates()
+    assert [sorted(os.path.basename(p) for p in g["files"]) for g in groups] == [["Other.BAT", "copy.bat", "test.bat"]]
+    wide = duplicates.find_duplicates(same_ext=False)
+    assert len(wide) == 1 and len(wide[0]["files"]) == 4

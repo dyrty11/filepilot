@@ -73,7 +73,7 @@ def _cmd_search(a) -> int:
 
 
 def _cmd_dupes(a) -> int:
-    groups = duplicates.find_duplicates(min_size=a.min_kb * 1024)
+    groups = duplicates.find_duplicates(min_size=a.min_kb * 1024, same_ext=not a.any_ext)
     lines = []
     for g in groups:
         lines.append(f"{human_size(g['size'])} x {len(g['files'])}")
@@ -135,7 +135,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("search", help="поиск по содержимому"); s.add_argument("query")
     s.add_argument("--ext"); s.add_argument("--min-kb", type=int); s.add_argument("--max-kb", type=int)
     s.add_argument("--older", type=int, help="старше N дней"); s.add_argument("--folder", help="искать только в этой папке"); s.add_argument("--limit", type=int, default=50); s.set_defaults(func=_cmd_search)
-    s = sub.add_parser("dupes", help="найти дубликаты"); s.add_argument("--min-kb", type=int, default=0); s.set_defaults(func=_cmd_dupes)
+    s = sub.add_parser("dupes", help="найти дубликаты"); s.add_argument("--min-kb", type=int, default=0)
+    s.add_argument("--any-ext", action="store_true", help="искать копии и среди файлов с разным расширением"); s.set_defaults(func=_cmd_dupes)
     s = sub.add_parser("top", help="самые крупные файлы"); s.add_argument("--limit", type=int, default=30); s.set_defaults(func=_cmd_top)
     s = sub.add_parser("rules", help="правила сортировки"); s.add_argument("action", choices=["list", "run"])
     s.add_argument("--name"); s.add_argument("--apply", action="store_true", help="выполнить (по умолчанию пробный запуск)"); s.set_defaults(func=_cmd_rules)
