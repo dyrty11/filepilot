@@ -473,17 +473,24 @@ def test_duplicates_tab_skips_tiny_files_by_default(app, tmp_path):
     root = tmp_path / "r"; root.mkdir()
     (root / "addons.json").write_text("{}", encoding="utf-8")   # 2 байта, как у Firefox weave
     (root / "forms.json").write_text("{}", encoding="utf-8")
-    (root / "a.dat").write_bytes(b"z" * 4096)
-    (root / "b.dat").write_bytes(b"z" * 4096)
+    (root / "a.dat").write_bytes(b"z" * 200_000)
+    (root / "b.dat").write_bytes(b"z" * 200_000)
+    (root / "c.dat").write_bytes(b"y" * 5000)   # крупнее «{}», но меньше порога 100 КБ
+    (root / "d.dat").write_bytes(b"y" * 5000)
     indexer.index_folders([str(root)])
     tab = DuplicatesTab()
     tab.start()
     wait_until(lambda: tab._task is None)
-    assert len(tab.groups) == 1 and tab.groups[0]["size"] == 4096
+    assert tab.min_kb.value() == 100
+    assert len(tab.groups) == 1 and tab.groups[0]["size"] == 200_000
+    tab.min_kb.setValue(1)
+    tab.start()
+    wait_until(lambda: tab._task is None)
+    assert sorted(g["size"] for g in tab.groups) == [5000, 200_000]
     tab.min_kb.setValue(0)
     tab.start()
     wait_until(lambda: tab._task is None)
-    assert len(tab.groups) == 2
+    assert len(tab.groups) == 3
 
 
 def test_hotkey_switch_turns_on_tray(app, monkeypatch):
@@ -496,3 +503,32 @@ def test_hotkey_switch_turns_on_tray(app, monkeypatch):
     monkeypatch.setattr(w._hotkey, "register", lambda: True)
     w._toggle_hotkey(True)
     assert w.settings.hotkey and w.settings.tray and w.act_tray.isChecked()
+
+
+def test_hotkey_turns_on_by_itself_once(app, monkeypatch):
+    """Раньше клавиша была выключена и пользователь считал, что она не работает: теперь включаем при первом запуске."""
+    from filepilot import hotkey
+    from filepilot.settings import load_settings
+    monkeypatch.setattr(hotkey.GlobalHotkey, "supported", staticmethod(lambda: True))
+    monkeypatch.setattr(hotkey.GlobalHotkey, "register", lambda self: setattr(self, "active", True) or True)
+    monkeypatch.setattr(hotkey.GlobalHotkey, "unregister", lambda self: setattr(self, "active", False))
+    w = MainWindow()
+    assert w.act_hotkey.isChecked() and w.settings.hotkey and "Ctrl+Alt+F" in w.hotkey_hint.text()
+    saved = load_settings()
+    assert saved.hotkey and saved.hotkey_seen
+    w.close()
+    # человек выключил клавишу: при следующем запуске она остаётся выключенной
+    s = load_settings(); s.hotkey = False; save_settings(s)
+    w2 = MainWindow()
+    assert not w2.act_hotkey.isChecked() and w2.hotkey_hint.text() == ""
+    w2.close()
+
+
+def test_hotkey_busy_on_first_run_shows_code(app, monkeypatch):
+    from filepilot import hotkey
+    monkeypatch.setattr(hotkey.GlobalHotkey, "supported", staticmethod(lambda: True))
+    def fail(self): self.error = 1409; return False
+    monkeypatch.setattr(hotkey.GlobalHotkey, "register", fail)
+    w = MainWindow()
+    assert not w.act_hotkey.isChecked() and "1409" in w.status.text()
+    w.close()

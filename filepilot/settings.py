@@ -23,6 +23,7 @@ class Settings:
     history: list[str] = field(default_factory=list)  # последние поисковые запросы, новые первыми
     tray: bool = False  # закрытие окна сворачивает программу в трей
     hotkey: bool = False  # глобальная горячая клавиша Ctrl+Alt+F (Windows)
+    hotkey_seen: bool = False  # клавишу один раз включили сами: раньше она была выключена и казалась неработающей
     exclude: list[str] = field(default_factory=list)  # исключения индексации: путь папки или маска имени (node_modules, *.tmp)
 
     def save_search(self, entry: dict) -> None:
@@ -88,6 +89,7 @@ def load_settings() -> Settings:
         last_seen_version=str(data.get("last_seen_version") or ""),
         tray=bool(data.get("tray", False)),
         hotkey=bool(data.get("hotkey", False)),
+        hotkey_seen=bool(data.get("hotkey_seen", False)),
         history=[str(x) for x in history if str(x).strip()][:20] if isinstance(history, list) else [],
         exclude=[str(x).strip() for x in exclude if str(x).strip()] if isinstance(exclude, list) else [],
         saved_searches=[e for e in (data.get("saved_searches") or []) if isinstance(e, dict) and e.get("name")],

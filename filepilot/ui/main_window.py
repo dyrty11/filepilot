@@ -123,6 +123,9 @@ class MainWindow(QMainWindow):
         sb.addWidget(self.status, 1)
         sb.addPermanentWidget(self.bar)
         self.status.setText(self._summary())
+        self.hotkey_hint = QLabel()
+        sb.addPermanentWidget(self.hotkey_hint)
+        self._announce_hotkey()
         self.search_tab.query.setFocus()
 
         if self.settings.auto_index and self.settings.folders:
@@ -424,21 +427,45 @@ class MainWindow(QMainWindow):
         self.act_hotkey.triggered.connect(self._toggle_hotkey)
         btn.setMenu(menu)
         tb.addWidget(btn)
-        if self.settings.hotkey and GlobalHotkey.supported():
-            ok = self._hotkey.register()
-            self.act_hotkey.setChecked(ok)
-            if ok:
-                self._ensure_background()
-            else:
-                self.settings.hotkey = False
+        self._hotkey_note: tuple[bool, bool] | None = None  # (получилось, первый запуск): сообщим, когда появится строка состояния
+        if GlobalHotkey.supported():
+            first_run = not self.settings.hotkey_seen
+            if first_run:  # клавиша должна работать сразу, а не после поиска нужной галочки в меню
+                self.settings.hotkey_seen = True
+                self.settings.hotkey = True
+            if self.settings.hotkey:
+                ok = self._hotkey.register()
+                self.act_hotkey.setChecked(ok)
+                if ok:
+                    self._ensure_background()
+                else:
+                    self.settings.hotkey = False
+                self._hotkey_note = (ok, first_run)
+            if first_run or self._hotkey_note:
                 save_settings(self.settings)
-                self.status.setText(tr("Горячая клавиша не включилась: сочетание занято (код {0}). Возможно, уже запущена другая копия FilePilot.").format(self._hotkey.error))
 
     def _apply_tray(self, on: bool) -> None:
         if self.tray is not None:
             self.tray.setVisible(on)
         # со значком в трее закрытое окно не должно завершать программу
         QApplication.setQuitOnLastWindowClosed(not on)
+
+    def _announce_hotkey(self) -> None:
+        from ..hotkey import HOTKEY_TEXT
+        note, active = self._hotkey_note, self._hotkey.active
+        self.hotkey_hint.setText(tr("{0}: быстрый поиск из любой программы").format(HOTKEY_TEXT) if active else "")
+        if note is None:
+            return
+        ok, first_run = note
+        if not ok:
+            self.status.setText(tr("Горячая клавиша не включилась: сочетание занято (код {0}). Возможно, уже запущена другая копия FilePilot.").format(self._hotkey.error))
+        elif first_run and self.tray is not None:
+            QTimer.singleShot(1500, lambda: self.tray.showMessage(
+                "FilePilot", tr("Включена горячая клавиша {0}: она показывает окно и сразу ищет. Выключить: меню «Окно».").format(HOTKEY_TEXT), self.tray.icon(), 6000))
+
+    def _announce_hotkey_state(self) -> None:
+        from ..hotkey import HOTKEY_TEXT
+        self.hotkey_hint.setText(tr("{0}: быстрый поиск из любой программы").format(HOTKEY_TEXT) if self._hotkey.active else "")
 
     def _ensure_background(self) -> None:
         """Горячая клавиша работает, пока программа запущена. Закрытие окна без трея завершило бы её,
@@ -459,11 +486,13 @@ class MainWindow(QMainWindow):
             self.settings.hotkey = ok
             if ok:
                 self._ensure_background()
-            else:
+            self._announce_hotkey_state()
+            if not ok:
                 QMessageBox.warning(self, "FilePilot", tr("Не удалось занять сочетание клавиш: возможно, его уже использует другая программа.") + f" ({self._hotkey.error})")
         else:
             self._hotkey.unregister()
             self.settings.hotkey = False
+            self._announce_hotkey_state()
         save_settings(self.settings)
 
     def show_and_search(self) -> None:

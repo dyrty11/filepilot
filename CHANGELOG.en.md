@@ -2,6 +2,10 @@
 
 Full history in Russian: [CHANGELOG.md](CHANGELOG.md).
 
+## 0.10.2
+- Hotkey Ctrl+Alt+F turns on by itself on the first start of this version (before, it was off and had to be found in the "Window" menu). Running in the tray is turned on with it, so the key keeps working after the window is closed. The status bar says the key is active; turn it off in the "Window" menu. If the combination is taken, the error code appears there.
+- Duplicates: files of 100 KB and more are checked by default, so small configs and empty stubs (like `{}`) no longer show up. Change the limit in the "At least" box. The list now has a column with the modification date.
+
 ## 0.10.1
 - Duplicates: files smaller than 1 KB are no longer checked by default. Tiny files such as Firefox's empty `{}` are almost always identical without being real copies. Change the limit in the "At least" box (0 includes everything); on the command line it is `--min-kb`.
 - Hotkey Ctrl+Alt+F: turning it on now also turns on running in the tray; before, closing the window quit the program and the key stopped working. If the combination is taken, the status bar shows the error code.

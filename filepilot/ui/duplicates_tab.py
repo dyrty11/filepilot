@@ -1,6 +1,9 @@
 """Вкладка «Дубликаты»: поиск одинаковых файлов и удаление лишних копий в корзину."""
 from __future__ import annotations
 
+import os
+from datetime import datetime
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QHBoxLayout, QSpinBox, QLabel, QMessageBox, QProgressBar, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
@@ -13,7 +16,14 @@ from ..i18n import plural
 from .workers import Task
 
 
-DEFAULT_MIN_KB = 1  # меньше килобайта: пустые JSON «{}», заглушки и прочая мелочь, а не настоящие копии
+DEFAULT_MIN_KB = 100  # мелочь (пустые JSON «{}», заглушки, конфиги) почти всегда «одинакова», но копиями не является и места не занимает
+
+
+def _mtime_text(path: str) -> str:
+    try:
+        return datetime.fromtimestamp(os.stat(path).st_mtime).strftime("%Y-%m-%d %H:%M")
+    except OSError:
+        return ""
 
 
 class DuplicatesTab(QWidget):
@@ -59,7 +69,7 @@ class DuplicatesTab(QWidget):
         self.bar.setVisible(False)
         lay.addWidget(self.bar)
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels([tr("Файл"), tr("Размер")])
+        self.tree.setHeaderLabels([tr("Файл"), tr("Размер"), tr("Изменён")])
         self.tree.setColumnWidth(0, 640)
         lay.addWidget(self.tree, 1)
         self.info = QLabel(tr("Нажмите «Найти дубликаты»: сравниваются файлы из индекса по содержимому."))
@@ -121,7 +131,7 @@ class DuplicatesTab(QWidget):
             top.setFirstColumnSpanned(False)
             self.tree.addTopLevelItem(top)
             for p in g["files"]:
-                ch = QTreeWidgetItem([p, human_size(g["size"])])
+                ch = QTreeWidgetItem([p, human_size(g["size"]), _mtime_text(p)])
                 ch.setFlags(ch.flags() | Qt.ItemFlag.ItemIsUserCheckable)
                 ch.setCheckState(0, Qt.CheckState.Unchecked)
                 top.addChild(ch)
